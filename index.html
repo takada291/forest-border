@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AR境界アプリ (光の柱モックアップ)</title>
+  <!-- A-Frame と AR.js (Location-based) の読み込み -->
+  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threex-location-only.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <style>
+    /* ARのキャンバス上にUIを重ねる設定 */
+    #ui-container {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      max-width: 400px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 15px;
+      border-radius: 10px;
+      z-index: 1000; /* AR映像より前面へ */
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+      font-family: sans-serif;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+      box-sizing: border-box;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      background-color: #28a745;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body style="margin: 0; overflow: hidden;">
+
+  <!-- 入力用UIパネル -->
+  <div id="ui-container">
+    <label>緯度 (Latitude):</label>
+    <input type="number" id="lat-input" step="0.000001" placeholder="例: 35.6895">
+    <label>経度 (Longitude):</label>
+    <input type="number" id="lng-input" step="0.000001" placeholder="例: 139.6917">
+    <button onclick="setBoundaryPoint()">光の柱を設置</button>
+  </div>
+
+  <!-- ARシーンの構築 -->
+  <a-scene
+    vr-mode-ui="enabled: false"
+    embedded
+    arjs="sourceType: webcam; debugUIEnabled: false;">
+
+    <!-- GPSカメラ（スマホの向きと位置情報を同期） -->
+    <a-camera gps-camera rotation-reader></a-camera>
+
+    <!-- 光の柱のオブジェクト（初期状態は非表示） -->
+    <a-entity id="boundary-marker" visible="false">
+      <!-- 高さ50mの半透明な黄色い円柱で「光の柱」を表現 -->
+      <a-cylinder
+        radius="0.5"
+        height="50"
+        color="#ffff00"
+        opacity="0.6"
+        material="emissive: #ffff00; emissiveIntensity: 0.8">
+      </a-cylinder>
+      <!-- 足元に目印のテキスト -->
+      <a-text
+        value="Target Point"
+        align="center"
+        position="0 2 0"
+        scale="3 3 3"
+        color="red">
+      </a-text>
+    </a-entity>
+  </a-scene>
+
+  <script>
+    function setBoundaryPoint() {
+      const lat = document.getElementById('lat-input').value;
+      const lng = document.getElementById('lng-input').value;
+
+      if (!lat || !lng) {
+        alert('緯度と経度を入力してください。');
+        return;
+      }
+
+      const marker = document.getElementById('boundary-marker');
+
+      // 入力された座標を gps-entity-place にセット
+      marker.setAttribute('gps-entity-place', `latitude: ${lat}; longitude: ${lng};`);
+
+      // 高さが50mある円柱の中心がY=0に配置されてしまうため、
+      // 半分の25m上にズラして、底面がカメラの高さ（現在地）付近になるよう調整
+      marker.setAttribute('position', '0 25 0');
+
+      marker.setAttribute('visible', 'true');
+      alert('光の柱を設置しました。カメラを周囲に向けて探してみてください。');
+    }
+  </script>
+</body>
+</html>
