@@ -1,8 +1,8 @@
-const CACHE_NAME = 'forestry-ar-v1.1.1'; // アップデート時はここを書き換える
+const CACHE_NAME = 'forestry-ar-v1.1.1'; // バージョンを上げて自動強制リロードを走らせます
 const ASSETS = [
   'index.html',
   'manifest.json',
-  'forestry-ar-icon.png', // アイコンファイルをキャッシュに追加
+  'forestry-ar-icon.png',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 ];
@@ -37,6 +37,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   event.respondWith(
     fetch(event.request).then(response => {
+      // 地理院地図タイルは読み込みながら動的に追加キャッシュしてオフラインに備える
       if (event.request.url.includes('cyberjapandata.gsi.go.jp')) {
         const responseClone = response.clone();
         caches.open(CACHE_NAME).then(cache => {
