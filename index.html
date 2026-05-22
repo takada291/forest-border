@@ -2,145 +2,193 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>AR境界アプリ (iOSフリーズ対策版)</title>
-  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threex-location-only.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <title>軽量版 境界AR (No 3D Engine)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <style>
-    /* スタート画面 */
-    #start-overlay {
+    body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
+    
+    /* カメラ映像を背景にフルスクリーン表示 */
+    #camera-view {
       position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.8);
-      z-index: 2000;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      color: white;
-      font-family: sans-serif;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      object-fit: cover;
+      z-index: 1;
     }
-    #start-btn {
-      padding: 15px 30px;
-      font-size: 18px;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-    /* 入力用UIパネル */
-    #ui-container {
+
+    /* 光の柱（CSSで表現） */
+    #light-pillar {
       position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 90%;
-      max-width: 400px;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 15px;
-      border-radius: 10px;
-      z-index: 1000;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-      font-family: sans-serif;
+      bottom: 0;
+      width: 60px;
+      height: 80vh;
+      background: linear-gradient(to top, rgba(255, 255, 0, 0.8), rgba(255, 255, 0, 0));
+      box-shadow: 0 0 20px rgba(255, 255, 0, 0.8);
+      z-index: 10;
+      transform: translateX(-50%); /* 中心合わせ */
       display: none; /* 初期状態は非表示 */
+      transition: left 0.1s ease-out;
     }
-    input {
-      width: 100%;
-      padding: 8px;
-      margin-bottom: 10px;
-      box-sizing: border-box;
+
+    /* 情報表示パネル */
+    #info-panel {
+      position: absolute;
+      top: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.6); color: white;
+      padding: 10px 20px; border-radius: 8px;
+      z-index: 20; text-align: center; width: 80%;
     }
-    button.action-btn {
-      width: 100%;
-      padding: 10px;
-      background-color: #28a745;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      font-size: 16px;
-      font-weight: bold;
+
+    /* スタート画面・入力画面 */
+    #ui-layer {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8); z-index: 100;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
     }
+    .panel { background: white; padding: 20px; border-radius: 10px; width: 80%; max-width: 300px; text-align: center; }
+    input { width: 90%; padding: 10px; margin-bottom: 10px; font-size: 16px; }
+    button { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin-bottom: 10px;}
+    button.start { background: #007bff; }
   </style>
 </head>
-<body style="margin: 0; overflow: hidden;">
+<body>
 
-  <div id="start-overlay">
-    <h2>AR境界ビューアー</h2>
-    <p>カメラとセンサーの許可が必要です</p>
-    <button id="start-btn" onclick="requestPermissions()">ARを開始する</button>
+  <video id="camera-view" autoplay playsinline muted></video>
+
+  <div id="light-pillar"></div>
+
+  <div id="info-panel" style="display:none;">
+    距離: <span id="dist-display">--</span> m<br>
+    方角差: <span id="angle-display">--</span>°
   </div>
 
-  <div id="ui-container">
-    <label>緯度 (Latitude):</label>
-    <input type="number" id="lat-input" step="0.000001" placeholder="例: 36.05803">
-    <label>経度 (Longitude):</label>
-    <input type="number" id="lng-input" step="0.000001" placeholder="例: 136.25158">
-    <button class="action-btn" onclick="setBoundaryPoint()">光の柱を設置</button>
-  </div>
+  <div id="ui-layer">
+    <div class="panel" id="step-start">
+      <h3>軽量ARモード</h3>
+      <button class="start" onclick="initApp()">カメラとコンパスを起動</button>
+    </div>
 
-  <div id="ar-container"></div>
+    <div class="panel" id="step-input" style="display:none;">
+      <p>目標の緯度・経度</p>
+      <input type="number" id="lat-input" placeholder="緯度 (例: 36.058)" step="0.000001">
+      <input type="number" id="lng-input" placeholder="経度 (例: 136.251)" step="0.000001">
+      <button onclick="setTarget()">探索開始</button>
+    </div>
+  </div>
 
   <script>
-    // 1. コンパスの許可を最優先でリクエスト
-    function requestPermissions() {
+    let currentLat = null, currentLng = null;
+    let targetLat = null, targetLng = null;
+    let currentHeading = 0; // スマホの向いている方角
+    const FOV = 60; // カメラの視野角（おおよそ60度と仮定）
+
+    // 1. アプリ初期化（カメラとセンサーの起動）
+    async function initApp() {
+      // コンパスの許可 (iOS向け)
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        // iOS 13以降
-        DeviceOrientationEvent.requestPermission()
-          .then(permissionState => {
-            if (permissionState === 'granted') {
-              initAR(); // 許可されたらARを展開
-            } else {
-              alert('コンパスのアクセスが拒否されました。設定からSafariのセンサーアクセスを許可してください。');
-            }
-          })
-          .catch(console.error);
-      } else {
-        // Androidや古いiOSの場合はそのまま進む
-        initAR();
+        try {
+          const permission = await DeviceOrientationEvent.requestPermission();
+          if (permission !== 'granted') {
+            alert('コンパスが許可されませんでした。');
+            return;
+          }
+        } catch (e) { console.error(e); }
       }
-    }
 
-    // 2. 許可が取れた後にAR本体（a-scene）を動的にHTMLに挿入
-    function initAR() {
-      document.getElementById('start-overlay').style.display = 'none';
-      document.getElementById('ui-container').style.display = 'block';
-
-      const arContainer = document.getElementById('ar-container');
-      
-      // ここで初めてA-FrameとAR.jsが初期化され、カメラとGPSの許可を取りに行く
-      arContainer.innerHTML = `
-        <a-scene
-          vr-mode-ui="enabled: false"
-          embedded
-          arjs="sourceType: webcam; debugUIEnabled: false;">
-          <a-camera gps-camera rotation-reader></a-camera>
-
-          <a-entity id="boundary-marker" visible="false">
-            <a-cylinder radius="0.5" height="50" color="#ffff00" opacity="0.6" material="emissive: #ffff00; emissiveIntensity: 0.8"></a-cylinder>
-            <a-text value="Target Point" align="center" position="0 2 0" scale="3 3 3" color="red"></a-text>
-          </a-entity>
-        </a-scene>
-      `;
-    }
-
-    // 3. 緯度経度をセットして光の柱を表示
-    function setBoundaryPoint() {
-      const lat = document.getElementById('lat-input').value;
-      const lng = document.getElementById('lng-input').value;
-
-      if (!lat || !lng) {
-        alert('緯度と経度を入力してください。');
+      // カメラの起動
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        document.getElementById('camera-view').srcObject = stream;
+      } catch (err) {
+        alert('カメラの起動に失敗しました。');
         return;
       }
 
-      // 動的生成された要素を取得
-      const marker = document.getElementById('boundary-marker');
-      
-      marker.setAttribute('gps-entity-place', `latitude: ${lat}; longitude: ${lng};`);
-      marker.setAttribute('position', '0 25 0');
-      marker.setAttribute('visible', 'true');
-      alert('光の柱を設置しました。カメラを周囲に向けて探してみてください。');
+      // センサーのリスナー登録
+      window.addEventListener('deviceorientation', handleOrientation, true);
+      navigator.geolocation.watchPosition(
+        pos => { currentLat = pos.coords.latitude; currentLng = pos.coords.longitude; updateView(); },
+        err => console.warn('GPS Error'),
+        { enableHighAccuracy: true }
+      );
+
+      // UIの切り替え
+      document.getElementById('step-start').style.display = 'none';
+      document.getElementById('step-input').style.display = 'block';
+    }
+
+    // 2. 目標地点のセット
+    function setTarget() {
+      targetLat = parseFloat(document.getElementById('lat-input').value);
+      targetLng = parseFloat(document.getElementById('lng-input').value);
+      if (!targetLat || !targetLng) return alert('座標を入力してください');
+
+      document.getElementById('ui-layer').style.display = 'none';
+      document.getElementById('info-panel').style.display = 'block';
+      updateView();
+    }
+
+    // 3. コンパスの処理（iOSとAndroidの差異吸収）
+    function handleOrientation(event) {
+      if (event.webkitCompassHeading) {
+        // iOS
+        currentHeading = event.webkitCompassHeading;
+      } else if (event.alpha !== null) {
+        // Android (大まかな計算)
+        currentHeading = 360 - event.alpha;
+      }
+      updateView();
+    }
+
+    // 4. 計算と描画の更新
+    function updateView() {
+      if (!currentLat || !targetLat) return;
+
+      // 距離と目標の方位角を計算
+      const dist = calcDistance(currentLat, currentLng, targetLat, targetLng);
+      const targetBearing = calcBearing(currentLat, currentLng, targetLat, targetLng);
+
+      document.getElementById('dist-display').innerText = Math.round(dist);
+
+      // 自分の方角と目標の方角の差分を計算
+      let angleDiff = targetBearing - currentHeading;
+      // -180 〜 180 の範囲に正規化
+      if (angleDiff > 180) angleDiff -= 360;
+      if (angleDiff < -180) angleDiff += 360;
+
+      document.getElementById('angle-display').innerText = Math.round(angleDiff);
+
+      const pillar = document.getElementById('light-pillar');
+
+      // 視野角（FOV）内に目標があるか判定し、画面上のX座標（%）に変換
+      if (Math.abs(angleDiff) < FOV / 2) {
+        pillar.style.display = 'block';
+        // 画面中央(50%)を基準に、角度差に応じて左右に移動
+        const screenX = 50 + (angleDiff / (FOV / 2)) * 50; 
+        pillar.style.left = screenX + '%';
+        
+        // 近づくほど柱を太くする等の表現も可能
+        const scale = Math.max(0.5, 50 / Math.max(dist, 1));
+        pillar.style.transform = `translateX(-50%) scaleX(${scale})`;
+      } else {
+        pillar.style.display = 'none'; // 視野外なら隠す
+      }
+    }
+
+    // --- ユーティリティ（距離と方位角の計算） ---
+    function calcDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371e3; // 地球の半径(m)
+      const φ1 = lat1 * Math.PI/180, φ2 = lat2 * Math.PI/180;
+      const Δφ = (lat2-lat1) * Math.PI/180, Δλ = (lon2-lon1) * Math.PI/180;
+      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    function calcBearing(lat1, lon1, lat2, lon2) {
+      const φ1 = lat1 * Math.PI/180, φ2 = lat2 * Math.PI/180;
+      const λ1 = lon1 * Math.PI/180, λ2 = lon2 * Math.PI/180;
+      const y = Math.sin(λ2-λ1) * Math.cos(φ2);
+      const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
+      return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
     }
   </script>
 </body>
