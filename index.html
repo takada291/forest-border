@@ -10,16 +10,14 @@
   
   <script>
     function emergencyReset() {
-      if(confirm('アプリを完全初期化します。よろしいですか？')) {
-        localStorage.clear();
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistrations().then(function(regs) {
-            for(var i=0; i<regs.length; i++) { regs[i].unregister(); }
-            window.location.reload(true);
-          });
-        } else {
+      localStorage.clear();
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          for(var i=0; i<regs.length; i++) { regs[i].unregister(); }
           window.location.reload(true);
-        }
+        });
+      } else {
+        window.location.reload(true);
       }
     }
     window.onerror = function(msg, url, line) {
@@ -42,42 +40,54 @@
     .pillar-body { width: 100%; height: 100%; filter: blur(2px); }
     .pillar-label { position: absolute; top: -55px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); border: 1px solid white; padding: 4px 8px; border-radius: 6px; font-size: 16px; font-weight: bold; white-space: nowrap; line-height: 1.2; text-align: center; }
 
-    #control-panel { position: absolute; bottom: calc(10px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: 92%; max-width: 440px; z-index: 20; display: none; }
-    .glass-box { background: rgba(0,0,0,0.75); padding: 10px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.6); backdrop-filter: blur(4px); }
+    /* 操作パネル（見切れ対策：パディングと上下マージンを極限まで縮小） */
+    #control-panel { position: absolute; bottom: calc(6px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: 94%; max-width: 420px; z-index: 20; display: none; }
+    .glass-box { background: rgba(0,0,0,0.8); padding: 8px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.6); }
     
-    #manual-input-form { display: none; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 8px; }
-    #manual-input-form input { background: rgba(255,255,255,0.15); border: 1px solid #666; color: white; padding: 6px; border-radius: 4px; font-size: 14px; flex: 1; min-width: 70px; }
-    .control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 14px; }
-    .nav-buttons { display: flex; gap: 6px; justify-content: center; width: 100%; }
+    #manual-input-form { display: none; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 6px; }
+    #manual-input-form input { background: rgba(255,255,255,0.15); border: 1px solid #666; color: white; padding: 5px; border-radius: 4px; font-size: 13px; flex: 1; min-width: 65px; }
+    .control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px; }
+    .nav-buttons { display: flex; gap: 5px; justify-content: center; width: 100%; }
 
-    .btn { padding: 8px 14px; border: none; border-radius: 6px; font-size: 13px; font-weight: bold; cursor: pointer; color: white; white-space: nowrap; }
+    /* ボタンのコンパクト化 */
+    .btn { padding: 7px 12px; border: none; border-radius: 5px; font-size: 12px; font-weight: bold; cursor: pointer; color: white; white-space: nowrap; }
     .btn-blue { background: #007bff; } .btn-green { background: #28a745; } .btn-orange { background: #ff9800; } .btn-red { background: #dc3545; } .btn-gray { background: #555; }
-    .btn-full { width: 100%; margin-bottom: 6px; padding: 6px; font-size: 12px; }
+    .btn-full { width: 100%; margin-bottom: 5px; padding: 5px; font-size: 11px; }
 
-    .screen-header { height: 50px; background: #222; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; box-sizing: border-box; border-bottom: 1px solid #444; }
-    .screen-title { font-weight:bold; font-size: 15px; }
+    .screen-header { height: 46px; background: #222; display: flex; justify-content: space-between; align-items: center; padding: 0 12px; box-sizing: border-box; border-bottom: 1px solid #444; }
+    .screen-title { font-weight:bold; font-size: 14px; }
     #map-screen, #point-list-screen { z-index: 500; }
-    #map { width: 100%; height: calc(100vh - 50px); }
+    #map { width: 100%; height: calc(100vh - 46px); }
     #point-list-screen { background: #111; }
-    #point-list-content { width: 100%; height: calc(100vh - 50px); overflow-y: auto; padding: 12px; box-sizing: border-box; }
-    .list-item { background: rgba(255,255,255,0.06); padding: 10px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1); }
+    #point-list-content { width: 100%; height: calc(100vh - 46px); overflow-y: auto; padding: 10px; box-sizing: border-box; }
+    .list-item { background: rgba(255,255,255,0.06); padding: 8px; border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1); }
     
     #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-    #app-icon { width: 90px; height: 90px; margin-bottom: 15px; border-radius: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.6); }
+    #app-icon { width: 80px; height: 80px; margin-bottom: 12px; border-radius: 16px; }
     #error-box { display: none; background: #dc3545; color: white; padding: 10px; margin: 15px; border-radius: 8px; font-size: 12px; width: 80%; word-break: break-all; }
+
+    /* 【新機能】自作の削除確認ダイアログ（カメラ停止を防ぐ） */
+    #custom-confirm { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20,20,20,0.95); border: 2px solid #dc3545; padding: 15px; border-radius: 10px; z-index: 2000; text-align: center; width: 75%; max-width: 280px; box-shadow: 0 4px 20px rgba(0,0,0,0.8); }
   </style>
 </head>
 <body>
 
+  <div id="custom-confirm">
+    <p style="margin: 0 0 12px 0; font-size: 14px; font-weight: bold;">すべての登録ポイントを<br>削除してもよろしいですか？</p>
+    <div style="display: flex; gap: 10px; justify-content: center;">
+      <button class="btn btn-red" onclick="executeClearPoints()">削除する</button>
+      <button class="btn btn-gray" onclick="closeConfirm()">戻る</button>
+    </div>
+  </div>
+
   <div id="start-overlay">
     <img id="app-icon" src="forestry-ar-icon.png" alt="アイコン" onerror="this.style.display='none'">
-    <h2 style="margin: 5px 0 0 0; font-size: 20px;">林業AR境界ナビ</h2>
-    <p style="color: #4CAF50; font-weight: bold; margin: 5px 0 20px 0;">v2.0.0</p>
+    <h2 style="margin: 5px 0 0 0; font-size: 18px;">林業AR境界ナビ</h2>
+    <p style="color: #4CAF50; font-weight: bold; margin: 4px 0 15px 0; font-size: 13px;">v2.1.0</p>
     
-    <button id="start-btn" class="btn btn-blue" style="font-size:16px; padding:12px 24px; width:80%; max-width:300px;" onclick="initApp()">ARアプリを起動</button>
-    
+    <button id="start-btn" class="btn btn-blue" style="font-size:15px; padding:10px 20px; width:75%; max-width:260px;" onclick="initApp()">ARアプリを起動</button>
     <div id="error-box"></div>
-    <button class="btn btn-red" style="margin-top: 40px; padding: 8px 16px; font-size: 12px; background: #555;" onclick="emergencyReset()">キャッシュを強制リセット</button>
+    <button class="btn btn-red" style="margin-top: 30px; padding: 6px 12px; font-size: 11px; background: #444;" onclick="emergencyReset()">キャッシュを強制リセット</button>
   </div>
 
   <div id="ar-screen" class="screen screen-active">
@@ -88,17 +98,17 @@
       <div class="glass-box">
         <button class="btn btn-gray btn-full" id="toggle-form-btn" onclick="toggleForm()">➕ 座標を手入力する</button>
         <div id="manual-input-form">
-          <input type="text" id="manual-name" placeholder="点名 (P1)">
+          <input type="text" id="manual-name" placeholder="点名">
           <input type="number" id="manual-lat" placeholder="緯度" step="0.000001">
           <input type="number" id="manual-lng" placeholder="経度" step="0.000001">
-          <button class="btn btn-green" style="padding: 5px 10px; font-size: 12px;" onclick="manualAddPoint()">追加</button>
+          <button class="btn btn-green" style="padding: 4px 8px; font-size: 11px;" onclick="manualAddPoint()">追加</button>
         </div>
 
         <div class="control-row">
-          <div>登録数: <span id="count-display" style="font-size:16px; font-weight:bold; color:#28a745;">0</span></div>
-          <div style="display: flex; gap: 5px;">
-            <button class="btn btn-orange" style="padding:4px 8px; font-size:11px;" onclick="toggleFlip()">🔄 反転</button>
-            <button class="btn btn-red" style="padding:4px 8px; font-size:11px;" onclick="clearPoints()">🗑 クリア</button>
+          <div>登録数: <span id="count-display" style="font-size:15px; font-weight:bold; color:#28a745;">0</span></div>
+          <div style="display: flex; gap: 4px;">
+            <button class="btn btn-orange" id="flip-btn-text" style="padding:4px 8px; font-size:11px;" onclick="rotateHeading()">🔄 補正: 0°</button>
+            <button class="btn btn-red" style="padding:4px 8px; font-size:11px;" onclick="openConfirm()">🗑 クリア</button>
           </div>
         </div>
 
@@ -127,7 +137,7 @@
   </div>
 
   <script>
-    var STORAGE_KEY = 'forestry_ar_points_v4';
+    var STORAGE_KEY = 'forestry_ar_points_v5';
     var currentLat = null, currentLng = null;
     var currentHeading = 0, headingOffset = 0;
     var points = []; 
@@ -137,30 +147,24 @@
     try {
       var stored = localStorage.getItem(STORAGE_KEY);
       if (stored) points = JSON.parse(stored);
-    } catch (e) {
-      points = [];
-    }
+    } catch (e) { points = []; }
 
     async function initApp() {
       var startBtn = document.getElementById('start-btn');
       startBtn.innerText = '起動処理中...';
       startBtn.disabled = true;
-      startBtn.style.background = '#555';
 
       try {
         if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
           const permission = await DeviceOrientationEvent.requestPermission();
           if (permission !== 'granted') {
-            alert('コンパスが拒否されました。設定を確認してください。');
+            alert('コンパスが拒否されました。');
             resetBtn(startBtn); return;
           }
         }
-      } catch (e) { console.log('Compass request skip'); }
+      } catch (e) { }
 
       try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          throw new Error("カメラ機能がブラウザで許可されていません。");
-        }
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         document.getElementById('camera-view').srcObject = stream;
       } catch (err) {
@@ -171,8 +175,7 @@
       window.addEventListener('deviceorientation', handleOrientation, true);
       navigator.geolocation.watchPosition(
         function(pos) { currentLat = pos.coords.latitude; currentLng = pos.coords.longitude; updateView(); },
-        function(err) { console.warn('GPS Error'); },
-        { enableHighAccuracy: true }
+        function(err) { }, { enableHighAccuracy: true }
       );
 
       document.getElementById('start-overlay').style.display = 'none';
@@ -181,22 +184,25 @@
     }
 
     function resetBtn(btn) {
-      btn.innerText = 'ARアプリを再起動';
-      btn.disabled = false;
-      btn.style.background = '#007bff';
+      btn.innerText = 'ARアプリを再起動'; btn.disabled = false;
     }
 
+    // 【改善】地図でのpromptを完全に排除し、地図上のポップアップ内に入力フォームを展開
     function showMapScreen() {
       showScreen('map-screen');
       if (!map) {
         map = L.map('map').setView([currentLat || 36.058, currentLng || 136.251], 16);
         L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png').addTo(map);
         markerGroup = L.layerGroup().addTo(map);
+        
         map.on('click', function(e) {
-          var pName = prompt('点名を入力', 'P' + (points.length + 1));
-          if (pName === null) return;
-          points.push({ lat: e.latlng.lat, lng: e.latlng.lng, name: pName || ('P' + (points.length + 1)) });
-          savePoints(); updateUIAndMarkers();
+          var defaultName = 'P' + (points.length + 1);
+          var popupHtml = '<div style="color:#000; padding:5px; font-family:sans-serif;">' +
+                          '<b style="font-size:12px;">点名を入力:</b><br>' +
+                          '<input type="text" id="map-pname" value="' + defaultName + '" style="width:110px; margin:4px 0; padding:4px; font-size:12px;"><br>' +
+                          '<button class="btn btn-green" style="padding:4px 8px; font-size:11px;" onclick="window.addPointFromMap(' + e.latlng.lat + ',' + e.latlng.lng + ')">確定</button>' +
+                          '</div>';
+          L.popup().setLatLng(e.latlng).setContent(popupHtml).openOn(map);
         });
       }
       setTimeout(function() {
@@ -204,6 +210,28 @@
         if (currentLat && currentLng) map.setView([currentLat, currentLng], 16);
         updateUIAndMarkers();
       }, 100);
+    }
+
+    // 地図ポップアップ用の確定グローバル関数
+    window.addPointFromMap = function(lat, lng) {
+      var nameInput = document.getElementById('map-pname');
+      var name = nameInput ? nameInput.value : ('P' + (points.length + 1));
+      points.push({ lat: lat, lng: lng, name: name });
+      savePoints(); updateUIAndMarkers(); map.closePopup();
+    };
+
+    // 【改善】90度回転ローテーション処理
+    function rotateHeading() {
+      headingOffset = (headingOffset + 90) % 360;
+      document.getElementById('flip-btn-text').innerText = '🔄 補正: ' + headingOffset + '°';
+      updateView();
+    }
+
+    // 【改善】消去確認のHTMLダイアログ制御（これでiPhoneの動画が死なない）
+    function openConfirm() { document.getElementById('custom-confirm').style.display = 'block'; }
+    function closeConfirm() { document.getElementById('custom-confirm').style.display = 'none'; }
+    function executeClearPoints() {
+      points = []; savePoints(); updateUIAndMarkers(); updateView(); closeConfirm();
     }
 
     function toggleForm() {
@@ -215,25 +243,19 @@
     function updateUIAndMarkers() {
       if (markerGroup) {
         markerGroup.clearLayers();
-        for(var i=0; i<points.length; i++) {
-          L.marker([points[i].lat, points[i].lng]).addTo(markerGroup).bindPopup(points[i].name);
-        }
+        for(var i=0; i<points.length; i++) { L.marker([points[i].lat, points[i].lng]).addTo(markerGroup).bindPopup(points[i].name); }
       }
       updateUI();
     }
 
     function manualAddPoint() {
-      var nameInput = document.getElementById('manual-name');
-      var latInput = document.getElementById('manual-lat');
-      var lngInput = document.getElementById('manual-lng');
-      var name = nameInput.value || ('P' + (points.length + 1));
-      var lat = parseFloat(latInput.value);
-      var lng = parseFloat(lngInput.value);
+      var nameInput = document.getElementById('manual-name'), latInput = document.getElementById('manual-lat'), lngInput = document.getElementById('manual-lng');
+      var name = nameInput.value || ('P' + (points.length + 1)), lat = parseFloat(latInput.value), lng = parseFloat(lngInput.value);
       if (isNaN(lat) || isNaN(lng)) return alert('緯度、経度を正しく入力してください。');
       points.push({ lat: lat, lng: lng, name: name });
       savePoints(); updateUI(); updateView();
       nameInput.value = ''; latInput.value = ''; lngInput.value = '';
-      toggleForm(); alert('「' + name + '」を追加しました。');
+      toggleForm();
     }
 
     function showScreen(screenId) {
@@ -251,17 +273,18 @@
       var html = '';
       for(var i=0; i<points.length; i++) {
         html += '<div class="list-item">';
-        html += '<div class="list-item-info"><div style="font-weight:bold; font-size:15px; color:#fff;">' + points[i].name + '</div><div class="list-item-coord">緯度: ' + points[i].lat.toFixed(6) + '<br>経度: ' + points[i].lng.toFixed(6) + '</div></div>';
-        html += '<button class="btn btn-red" style="font-size:12px; padding:5px 10px;" onclick="deletePoint(' + i + ')">削除</button>';
+        html += '<div class="list-item-info"><div style="font-weight:bold; font-size:14px; color:#fff;">' + points[i].name + '</div><div class="list-item-coord">緯度: ' + points[i].lat.toFixed(6) + '<br>経度: ' + points[i].lng.toFixed(6) + '</div></div>';
+        html += '<button class="btn btn-red" style="font-size:11px; padding:4px 8px;" onclick="deletePoint(' + i + ')">削除</button>';
         html += '</div>';
       }
       content.innerHTML = html;
     }
 
-    function deletePoint(index) { if (!confirm('削除しますか？')) return; points.splice(index, 1); savePoints(); updatePointList(); updateUI(); }
+    function deletePoint(index) {
+      points.splice(index, 1); savePoints(); updatePointList(); updateUI();
+    }
     function savePoints() { localStorage.setItem(STORAGE_KEY, JSON.stringify(points)); }
-    function clearPoints() { if (!confirm('すべて削除しますか？')) return; points = []; savePoints(); updateUI(); updateView(); }
-    function toggleFlip() { headingOffset = headingOffset === 0 ? 180 : 0; updateView(); }
+    function clearPoints() { openConfirm(); }
     function updateUI() { document.getElementById('count-display').innerText = points.length; }
 
     function handleOrientation(event) {
@@ -272,10 +295,15 @@
     }
 
     function updateView() {
-      if (!currentLat || points.length === 0 || !document.getElementById('ar-screen').classList.contains('screen-active')) return;
       var container = document.getElementById('pillars-container'); 
+      if (!container) return;
+      
+      // 【バグ修正】登録ポイントがない場合は、コンテナを空にして即座に抜ける
+      if (!currentLat || points.length === 0 || !document.getElementById('ar-screen').classList.contains('screen-active')) {
+        container.innerHTML = ''; return;
+      }
+      
       var html = '';
-
       for(var i=0; i<points.length; i++) {
         var p = points[i];
         var dist = calcDistance(currentLat, currentLng, p.lat, p.lng);
@@ -298,26 +326,19 @@
       container.innerHTML = html;
     }
 
-    // 数式ロジックの完全な安全化（ギリシャ文字や高度な構文を排除）
     function calcDistance(lat1, lon1, lat2, lon2) {
       var R = 6371e3;
-      var rLat1 = lat1 * Math.PI / 180;
-      var rLat2 = lat2 * Math.PI / 180;
-      var dLat = (lat2 - lat1) * Math.PI / 180;
-      var dLon = (lon2 - lon1) * Math.PI / 180;
+      var rLat1 = lat1 * Math.PI / 180; var rLat2 = lat2 * Math.PI / 180;
+      var dLat = (lat2 - lat1) * Math.PI / 180; var dLon = (lon2 - lon1) * Math.PI / 180;
       var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(rLat1) * Math.cos(rLat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
     }
     
     function calcBearing(lat1, lon1, lat2, lon2) {
-      var rLat1 = lat1 * Math.PI / 180;
-      var rLat2 = lat2 * Math.PI / 180;
-      var dLon = (lon2 - lon1) * Math.PI / 180;
+      var rLat1 = lat1 * Math.PI / 180; var rLat2 = lat2 * Math.PI / 180; var dLon = (lon2 - lon1) * Math.PI / 180;
       var y = Math.sin(dLon) * Math.cos(rLat2);
       var x = Math.cos(rLat1) * Math.sin(rLat2) - Math.sin(rLat1) * Math.cos(rLat2) * Math.cos(dLon);
-      var brng = Math.atan2(y, x) * 180 / Math.PI;
-      return (brng + 360) % 360;
+      return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
     }
 
     if ('serviceWorker' in navigator) {
@@ -325,9 +346,7 @@
         reg.addEventListener('updatefound', function() {
           var newWorker = reg.installing;
           newWorker.addEventListener('statechange', function() {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              window.location.reload(true);
-            }
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) { window.location.reload(true); }
           });
         });
       });
