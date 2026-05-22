@@ -2,15 +2,32 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <title>林業AR境界ビューアーナビ</title>
+  <title>林業AR境界ナビ</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   
   <script>
+    function emergencyReset() {
+      if(confirm('アプリを完全初期化します。よろしいですか？')) {
+        localStorage.clear();
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            for(var i=0; i<regs.length; i++) { regs[i].unregister(); }
+            window.location.reload(true);
+          });
+        } else {
+          window.location.reload(true);
+        }
+      }
+    }
     window.onerror = function(msg, url, line) {
-      alert("システムエラー発生!\n" + msg + "\n行: " + line + "\n※この画面をスクリーンショットしてください");
+      var errBox = document.getElementById('error-box');
+      if(errBox) {
+        errBox.style.display = 'block';
+        errBox.innerHTML = "<b>システムエラー:</b><br>" + msg + "<br>行: " + line;
+      }
       return false;
     };
   </script>
@@ -44,22 +61,23 @@
     #point-list-screen { background: #111; }
     #point-list-content { width: 100%; height: calc(100vh - 50px); overflow-y: auto; padding: 12px; box-sizing: border-box; }
     .list-item { background: rgba(255,255,255,0.06); padding: 10px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1); }
-    .list-item-info { font-size: 13px; line-height: 1.4; }
-    .list-item-coord { color: #aaa; font-size: 12px; font-family: monospace; }
     
     #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center; }
     #app-icon { width: 90px; height: 90px; margin-bottom: 15px; border-radius: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.6); }
+    #error-box { display: none; background: #dc3545; color: white; padding: 10px; margin: 15px; border-radius: 8px; font-size: 12px; width: 80%; word-break: break-all; }
   </style>
 </head>
 <body>
 
   <div id="start-overlay">
-    <img id="app-icon" src="forestry-ar-icon.png" alt="ARアイコン" onerror="this.style.display='none'">
-    <h2 style="margin: 5px 0 10px 0; font-size: 20px;">林業AR境界ナビ</h2>
-    <p style="color: #ccc; margin: 0 0 20px 0; font-size: 14px;">カメラ・GPS・コンパスを使用します</p>
+    <img id="app-icon" src="forestry-ar-icon.png" alt="アイコン" onerror="this.style.display='none'">
+    <h2 style="margin: 5px 0 0 0; font-size: 20px;">林業AR境界ナビ</h2>
+    <p style="color: #4CAF50; font-weight: bold; margin: 5px 0 20px 0;">v2.0.0</p>
     
     <button id="start-btn" class="btn btn-blue" style="font-size:16px; padding:12px 24px; width:80%; max-width:300px;" onclick="initApp()">ARアプリを起動</button>
-    <button class="btn btn-red" style="margin-top: 40px; padding: 8px 16px; font-size: 12px; background: #666;" onclick="hardReset()">不具合が続く場合はここをタップ（初期化）</button>
+    
+    <div id="error-box"></div>
+    <button class="btn btn-red" style="margin-top: 40px; padding: 8px 16px; font-size: 12px; background: #555;" onclick="emergencyReset()">キャッシュを強制リセット</button>
   </div>
 
   <div id="ar-screen" class="screen screen-active">
@@ -109,37 +127,22 @@
   </div>
 
   <script>
-    const STORAGE_KEY = 'forestry_ar_points_v3';
-    let currentLat = null, currentLng = null;
-    let currentHeading = 0, headingOffset = 0;
-    let points = []; 
-    const FOV = 60; 
-    let map = null, markerGroup = null;
+    var STORAGE_KEY = 'forestry_ar_points_v4';
+    var currentLat = null, currentLng = null;
+    var currentHeading = 0, headingOffset = 0;
+    var points = []; 
+    var FOV = 60; 
+    var map = null, markerGroup = null;
 
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      var stored = localStorage.getItem(STORAGE_KEY);
       if (stored) points = JSON.parse(stored);
     } catch (e) {
-      console.warn('Load Data Error', e);
       points = [];
     }
 
-    function hardReset() {
-      if(confirm('アプリを初期状態に戻します。よろしいですか？')) {
-        localStorage.clear();
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistrations().then(regs => {
-            for(let reg of regs) reg.unregister();
-            window.location.replace(window.location.href);
-          });
-        } else {
-          window.location.replace(window.location.href);
-        }
-      }
-    }
-
     async function initApp() {
-      const startBtn = document.getElementById('start-btn');
+      var startBtn = document.getElementById('start-btn');
       startBtn.innerText = '起動処理中...';
       startBtn.disabled = true;
       startBtn.style.background = '#555';
@@ -152,23 +155,24 @@
             resetBtn(startBtn); return;
           }
         }
-      } catch (e) { console.warn('Compass skip', e); }
+      } catch (e) { console.log('Compass request skip'); }
 
       try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          throw new Error("カメラが見つかりません。HTTPS通信か確認してください。");
+          throw new Error("カメラ機能がブラウザで許可されていません。");
         }
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         document.getElementById('camera-view').srcObject = stream;
       } catch (err) {
-        alert('カメラの起動エラー: ' + err.message);
+        alert('カメラエラー: ' + err.message);
         resetBtn(startBtn); return;
       }
 
       window.addEventListener('deviceorientation', handleOrientation, true);
       navigator.geolocation.watchPosition(
-        pos => { currentLat = pos.coords.latitude; currentLng = pos.coords.longitude; updateView(); },
-        err => console.warn('GPS Error'), { enableHighAccuracy: true }
+        function(pos) { currentLat = pos.coords.latitude; currentLng = pos.coords.longitude; updateView(); },
+        function(err) { console.warn('GPS Error'); },
+        { enableHighAccuracy: true }
       );
 
       document.getElementById('start-overlay').style.display = 'none';
@@ -186,18 +190,16 @@
       showScreen('map-screen');
       if (!map) {
         map = L.map('map').setView([currentLat || 36.058, currentLng || 136.251], 16);
-        const gsiStdLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png').addTo(map);
-        const gsiPhotoLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg');
-        L.control.layers({"等高線/標準": gsiStdLayer, "空中写真": gsiPhotoLayer}, null, {collapsed:false}).addTo(map);
+        L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png').addTo(map);
         markerGroup = L.layerGroup().addTo(map);
         map.on('click', function(e) {
-          const pName = prompt('点名を入力', `P${points.length + 1}`);
+          var pName = prompt('点名を入力', 'P' + (points.length + 1));
           if (pName === null) return;
-          points.push({ lat: e.latlng.lat, lng: e.latlng.lng, name: pName || `P${points.length + 1}` });
+          points.push({ lat: e.latlng.lat, lng: e.latlng.lng, name: pName || ('P' + (points.length + 1)) });
           savePoints(); updateUIAndMarkers();
         });
       }
-      setTimeout(() => {
+      setTimeout(function() {
         map.invalidateSize();
         if (currentLat && currentLng) map.setView([currentLat, currentLng], 16);
         updateUIAndMarkers();
@@ -205,7 +207,7 @@
     }
 
     function toggleForm() {
-      const form = document.getElementById('manual-input-form'), btn = document.getElementById('toggle-form-btn');
+      var form = document.getElementById('manual-input-form'), btn = document.getElementById('toggle-form-btn');
       if (form.style.display === 'flex') { form.style.display = 'none'; btn.innerText = '➕ 座標を手入力する'; }
       else { form.style.display = 'flex'; btn.innerText = '➖ 入力フォームを閉じる'; }
     }
@@ -213,23 +215,30 @@
     function updateUIAndMarkers() {
       if (markerGroup) {
         markerGroup.clearLayers();
-        points.forEach(p => L.marker([p.lat, p.lng]).addTo(markerGroup).bindPopup(p.name));
+        for(var i=0; i<points.length; i++) {
+          L.marker([points[i].lat, points[i].lng]).addTo(markerGroup).bindPopup(points[i].name);
+        }
       }
       updateUI();
     }
 
     function manualAddPoint() {
-      const nameInput = document.getElementById('manual-name'), latInput = document.getElementById('manual-lat'), lngInput = document.getElementById('manual-lng');
-      const name = nameInput.value || `P${points.length + 1}`, lat = parseFloat(latInput.value), lng = parseFloat(lngInput.value);
+      var nameInput = document.getElementById('manual-name');
+      var latInput = document.getElementById('manual-lat');
+      var lngInput = document.getElementById('manual-lng');
+      var name = nameInput.value || ('P' + (points.length + 1));
+      var lat = parseFloat(latInput.value);
+      var lng = parseFloat(lngInput.value);
       if (isNaN(lat) || isNaN(lng)) return alert('緯度、経度を正しく入力してください。');
       points.push({ lat: lat, lng: lng, name: name });
       savePoints(); updateUI(); updateView();
       nameInput.value = ''; latInput.value = ''; lngInput.value = '';
-      toggleForm(); alert(`「${name}」を追加しました。`);
+      toggleForm(); alert('「' + name + '」を追加しました。');
     }
 
     function showScreen(screenId) {
-      document.querySelectorAll('.screen').forEach(s => s.classList.remove('screen-active'));
+      var screens = document.querySelectorAll('.screen');
+      for(var i=0; i<screens.length; i++) { screens[i].classList.remove('screen-active'); }
       document.getElementById(screenId).classList.add('screen-active');
     }
 
@@ -237,16 +246,16 @@
     function showListScreen() { showScreen('point-list-screen'); updatePointList(); }
 
     function updatePointList() {
-      const content = document.getElementById('point-list-content'); content.innerHTML = '';
+      var content = document.getElementById('point-list-content'); content.innerHTML = '';
       if (points.length === 0) { content.innerHTML = '<p style="text-align:center; color:#bbb; margin-top:40px;">ポイント未登録</p>'; return; }
-      points.forEach((p, index) => {
-        content.insertAdjacentHTML('beforeend', `
-          <div class="list-item">
-            <div class="list-item-info"><div style="font-weight:bold; font-size:15px; color:#fff;">${p.name}</div><div class="list-item-coord">緯度: ${p.lat.toFixed(6)}<br>経度: ${p.lng.toFixed(6)}</div></div>
-            <button class="btn btn-red" style="font-size:12px; padding:5px 10px;" onclick="deletePoint(${index})">削除</button>
-          </div>
-        `);
-      });
+      var html = '';
+      for(var i=0; i<points.length; i++) {
+        html += '<div class="list-item">';
+        html += '<div class="list-item-info"><div style="font-weight:bold; font-size:15px; color:#fff;">' + points[i].name + '</div><div class="list-item-coord">緯度: ' + points[i].lat.toFixed(6) + '<br>経度: ' + points[i].lng.toFixed(6) + '</div></div>';
+        html += '<button class="btn btn-red" style="font-size:12px; padding:5px 10px;" onclick="deletePoint(' + i + ')">削除</button>';
+        html += '</div>';
+      }
+      content.innerHTML = html;
     }
 
     function deletePoint(index) { if (!confirm('削除しますか？')) return; points.splice(index, 1); savePoints(); updatePointList(); updateUI(); }
@@ -256,7 +265,7 @@
     function updateUI() { document.getElementById('count-display').innerText = points.length; }
 
     function handleOrientation(event) {
-      let rawHeading = 0;
+      var rawHeading = 0;
       if (event.webkitCompassHeading) rawHeading = event.webkitCompassHeading;
       else if (event.alpha !== null) rawHeading = 360 - event.alpha;
       currentHeading = (rawHeading + headingOffset) % 360; updateView();
@@ -264,35 +273,65 @@
 
     function updateView() {
       if (!currentLat || points.length === 0 || !document.getElementById('ar-screen').classList.contains('screen-active')) return;
-      const container = document.getElementById('pillars-container'); container.innerHTML = ''; 
+      var container = document.getElementById('pillars-container'); 
+      var html = '';
 
-      points.forEach((p) => {
-        const dist = calcDistance(currentLat, currentLng, p.lat, p.lng);
-        const targetBearing = calcBearing(currentLat, currentLng, p.lat, p.lng);
-        let angleDiff = targetBearing - currentHeading;
+      for(var i=0; i<points.length; i++) {
+        var p = points[i];
+        var dist = calcDistance(currentLat, currentLng, p.lat, p.lng);
+        var targetBearing = calcBearing(currentLat, currentLng, p.lat, p.lng);
+        var angleDiff = targetBearing - currentHeading;
         if (angleDiff > 180) angleDiff -= 360; 
         if (angleDiff < -180) angleDiff += 360;
 
         if (Math.abs(angleDiff) < FOV / 2) {
-          const screenX = 50 + (angleDiff / (FOV / 2)) * 50;
-          const scale = Math.min(3.0, Math.max(0.3, 40 / Math.max(dist, 1)));
-          let hue = dist < 50 ? (dist / 50) * 60 : dist < 150 ? 60 + ((dist - 50) / 100) * 160 : 220;
+          var screenX = 50 + (angleDiff / (FOV / 2)) * 50;
+          var scale = Math.min(3.0, Math.max(0.3, 40 / Math.max(dist, 1)));
+          var hue = dist < 50 ? (dist / 50) * 60 : dist < 150 ? 60 + ((dist - 50) / 100) * 160 : 220;
 
-          container.insertAdjacentHTML('beforeend', `
-            <div class="light-pillar" style="display:block; left:${screenX}%; transform:translateX(-50%) scaleX(${scale});">
-              <div class="pillar-label">${p.name}<br>${Math.round(dist)} m</div>
-              <div class="pillar-body" style="background: linear-gradient(to top, hsla(${hue}, 100%, 50%, 0.8), hsla(${hue}, 100%, 50%, 0)); box-shadow: 0 0 15px hsla(${hue}, 100%, 50%, 0.6);"></div>
-            </div>
-          `);
+          html += '<div class="light-pillar" style="display:block; left:' + screenX + '%; transform:translateX(-50%) scaleX(' + scale + ');">';
+          html += '<div class="pillar-label">' + p.name + '<br>' + Math.round(dist) + ' m</div>';
+          html += '<div class="pillar-body" style="background: linear-gradient(to top, hsla(' + hue + ', 100%, 50%, 0.8), hsla(' + hue + ', 100%, 50%, 0)); box-shadow: 0 0 15px hsla(' + hue + ', 100%, 50%, 0.6);"></div>';
+          html += '</div>';
         }
-      });
+      }
+      container.innerHTML = html;
     }
 
-    // 【修正】ギリシャ文字の変数をすべて英語表記に変更し、エラーを防止
+    // 数式ロジックの完全な安全化（ギリシャ文字や高度な構文を排除）
     function calcDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371e3;
-      const phi1 = lat1 * Math.PI/180;
-      const phi2 = lat2 * Math.PI/180;
-      const dPhi = (lat2-lat1) * Math.PI/180;
-      const dLam = (lon2-lon1) * Math.PI/180;
-      const a = Math.sin(dPhi/2) * Math.sin(dPhi/2) + Math.cos(phi1) * Math.cos(phi2) * Math.sin(
+      var R = 6371e3;
+      var rLat1 = lat1 * Math.PI / 180;
+      var rLat2 = lat2 * Math.PI / 180;
+      var dLat = (lat2 - lat1) * Math.PI / 180;
+      var dLon = (lon2 - lon1) * Math.PI / 180;
+      var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(rLat1) * Math.cos(rLat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+    
+    function calcBearing(lat1, lon1, lat2, lon2) {
+      var rLat1 = lat1 * Math.PI / 180;
+      var rLat2 = lat2 * Math.PI / 180;
+      var dLon = (lon2 - lon1) * Math.PI / 180;
+      var y = Math.sin(dLon) * Math.cos(rLat2);
+      var x = Math.cos(rLat1) * Math.sin(rLat2) - Math.sin(rLat1) * Math.cos(rLat2) * Math.cos(dLon);
+      var brng = Math.atan2(y, x) * 180 / Math.PI;
+      return (brng + 360) % 360;
+    }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').then(function(reg) {
+        reg.addEventListener('updatefound', function() {
+          var newWorker = reg.installing;
+          newWorker.addEventListener('statechange', function() {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              window.location.reload(true);
+            }
+          });
+        });
+      });
+    }
+  </script>
+</body>
+</html>
