@@ -40,7 +40,7 @@
     .pillar-body { width: 100%; height: 100%; filter: blur(2px); }
     .pillar-label { position: absolute; top: -55px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); border: 1px solid white; padding: 4px 8px; border-radius: 6px; font-size: 16px; font-weight: bold; white-space: nowrap; line-height: 1.2; text-align: center; }
 
-    /* 【変更点】操作パネルを画面上部に配置 (ノッチ対応のsafe-area-inset-topを使用) */
+    /* 操作パネル（Top UIレイアウト） */
     #control-panel { 
       position: absolute; 
       top: calc(10px + env(safe-area-inset-top)); 
@@ -91,7 +91,7 @@
   <div id="start-overlay">
     <img id="app-icon" src="forestry-ar-icon.png" alt="アイコン" onerror="this.style.display='none'">
     <h2 style="margin: 5px 0 0 0; font-size: 18px;">林業AR境界ナビ</h2>
-    <p style="color: #4CAF50; font-weight: bold; margin: 4px 0 15px 0; font-size: 13px;">v2.2.0 (Top UI)</p>
+    <p style="color: #4CAF50; font-weight: bold; margin: 4px 0 15px 0; font-size: 13px;">v2.3.0 (安定化版)</p>
     
     <button id="start-btn" class="btn btn-blue" style="font-size:15px; padding:10px 20px; width:75%; max-width:260px;" onclick="initApp()">ARアプリを起動</button>
     <div id="error-box"></div>
@@ -151,6 +151,7 @@
     var points = []; 
     var FOV = 60; 
     var map = null, markerGroup = null;
+    var lastHeading = null; // コンパス平滑化用の変数
 
     try {
       var stored = localStorage.getItem(STORAGE_KEY);
@@ -288,14 +289,37 @@
       points.splice(index, 1); savePoints(); updatePointList(); updateUI();
     }
     function savePoints() { localStorage.setItem(STORAGE_KEY, JSON.stringify(points)); }
-    function clearPoints() { openConfirm(); }
     function updateUI() { document.getElementById('count-display').innerText = points.length; }
 
+    // 【重要】センサーのブレ吸収と0度またぎ問題の修正
     function handleOrientation(event) {
       var rawHeading = 0;
-      if (event.webkitCompassHeading) rawHeading = event.webkitCompassHeading;
-      else if (event.alpha !== null) rawHeading = 360 - event.alpha;
-      currentHeading = (rawHeading + headingOffset) % 360; updateView();
+      if (event.webkitCompassHeading) {
+        rawHeading = event.webkitCompassHeading;
+      } else if (event.alpha !== null) {
+        rawHeading = 360 - event.alpha;
+      } else {
+        return; // データがない場合は処理しない
+      }
+
+      var targetHeading = (rawHeading + headingOffset) % 360;
+
+      // ローパスフィルタによる平滑化
+      if (lastHeading === null) {
+        lastHeading = targetHeading;
+      } else {
+        var diff = targetHeading - lastHeading;
+        // 0度またぎの計算（最短距離で回転させる）
+        if (diff > 180) diff -= 360;
+        if (diff < -180) diff += 360;
+
+        // 新しいデータを15%だけ信用して滑らかに動かす
+        lastHeading += diff * 0.15;
+        lastHeading = (lastHeading + 360) % 360; // 0〜360の範囲に戻す
+      }
+
+      currentHeading = lastHeading;
+      updateView();
     }
 
     function updateView() {
