@@ -2,43 +2,38 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>軽量版 境界AR (No 3D Engine)</title>
+  <title>軽量版 境界AR (180度反転機能付き)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <style>
     body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
     
-    /* カメラ映像を背景にフルスクリーン表示 */
     #camera-view {
-      position: absolute;
-      top: 0; left: 0; width: 100vw; height: 100vh;
-      object-fit: cover;
-      z-index: 1;
+      position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+      object-fit: cover; z-index: 1;
     }
 
-    /* 光の柱（CSSで表現） */
     #light-pillar {
-      position: absolute;
-      bottom: 0;
-      width: 60px;
-      height: 80vh;
+      position: absolute; bottom: 0; width: 60px; height: 80vh;
       background: linear-gradient(to top, rgba(255, 255, 0, 0.8), rgba(255, 255, 0, 0));
       box-shadow: 0 0 20px rgba(255, 255, 0, 0.8);
-      z-index: 10;
-      transform: translateX(-50%); /* 中心合わせ */
-      display: none; /* 初期状態は非表示 */
-      transition: left 0.1s ease-out;
+      z-index: 10; transform: translateX(-50%);
+      display: none; transition: left 0.1s ease-out;
     }
 
-    /* 情報表示パネル */
     #info-panel {
-      position: absolute;
-      top: 20px; left: 50%; transform: translateX(-50%);
+      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
       background: rgba(0,0,0,0.6); color: white;
       padding: 10px 20px; border-radius: 8px;
       z-index: 20; text-align: center; width: 80%;
     }
 
-    /* スタート画面・入力画面 */
+    /* 新しく追加した反転ボタンのスタイル */
+    .flip-btn {
+      margin-top: 10px; padding: 8px;
+      background-color: #ff9800; color: white;
+      border: none; border-radius: 5px; cursor: pointer; width: 100%;
+    }
+
     #ui-layer {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.8); z-index: 100;
@@ -46,19 +41,19 @@
     }
     .panel { background: white; padding: 20px; border-radius: 10px; width: 80%; max-width: 300px; text-align: center; }
     input { width: 90%; padding: 10px; margin-bottom: 10px; font-size: 16px; }
-    button { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin-bottom: 10px;}
-    button.start { background: #007bff; }
+    button.start { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
+    button.action { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin-bottom: 10px;}
   </style>
 </head>
 <body>
 
   <video id="camera-view" autoplay playsinline muted></video>
-
   <div id="light-pillar"></div>
 
   <div id="info-panel" style="display:none;">
     距離: <span id="dist-display">--</span> m<br>
     方角差: <span id="angle-display">--</span>°
+    <button class="flip-btn" onclick="toggleFlip()">🔄 向きを180度反転</button>
   </div>
 
   <div id="ui-layer">
@@ -71,39 +66,36 @@
       <p>目標の緯度・経度</p>
       <input type="number" id="lat-input" placeholder="緯度 (例: 36.058)" step="0.000001">
       <input type="number" id="lng-input" placeholder="経度 (例: 136.251)" step="0.000001">
-      <button onclick="setTarget()">探索開始</button>
+      <button class="action" onclick="setTarget()">探索開始</button>
     </div>
   </div>
 
   <script>
     let currentLat = null, currentLng = null;
     let targetLat = null, targetLng = null;
-    let currentHeading = 0; // スマホの向いている方角
-    const FOV = 60; // カメラの視野角（おおよそ60度と仮定）
+    let currentHeading = 0; 
+    let headingOffset = 0; // 反転用のオフセット角（0か180）を追加
+    const FOV = 60; 
 
-    // 1. アプリ初期化（カメラとセンサーの起動）
+    // 反転ボタンが押された時の処理
+    function toggleFlip() {
+      headingOffset = headingOffset === 0 ? 180 : 0;
+      updateView();
+    }
+
     async function initApp() {
-      // コンパスの許可 (iOS向け)
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         try {
           const permission = await DeviceOrientationEvent.requestPermission();
-          if (permission !== 'granted') {
-            alert('コンパスが許可されませんでした。');
-            return;
-          }
+          if (permission !== 'granted') return alert('コンパスが許可されませんでした。');
         } catch (e) { console.error(e); }
       }
 
-      // カメラの起動
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         document.getElementById('camera-view').srcObject = stream;
-      } catch (err) {
-        alert('カメラの起動に失敗しました。');
-        return;
-      }
+      } catch (err) { return alert('カメラの起動に失敗しました。'); }
 
-      // センサーのリスナー登録
       window.addEventListener('deviceorientation', handleOrientation, true);
       navigator.geolocation.watchPosition(
         pos => { currentLat = pos.coords.latitude; currentLng = pos.coords.longitude; updateView(); },
@@ -111,12 +103,10 @@
         { enableHighAccuracy: true }
       );
 
-      // UIの切り替え
       document.getElementById('step-start').style.display = 'none';
       document.getElementById('step-input').style.display = 'block';
     }
 
-    // 2. 目標地点のセット
     function setTarget() {
       targetLat = parseFloat(document.getElementById('lat-input').value);
       targetLng = parseFloat(document.getElementById('lng-input').value);
@@ -127,31 +117,29 @@
       updateView();
     }
 
-    // 3. コンパスの処理（iOSとAndroidの差異吸収）
+    // コンパスの処理（オフセットを足すように修正）
     function handleOrientation(event) {
+      let rawHeading = 0;
       if (event.webkitCompassHeading) {
-        // iOS
-        currentHeading = event.webkitCompassHeading;
+        rawHeading = event.webkitCompassHeading;
       } else if (event.alpha !== null) {
-        // Android (大まかな計算)
-        currentHeading = 360 - event.alpha;
+        rawHeading = 360 - event.alpha;
       }
+      
+      // ボタンで設定したオフセット（0度か180度）を足して、360度で丸める
+      currentHeading = (rawHeading + headingOffset) % 360;
       updateView();
     }
 
-    // 4. 計算と描画の更新
     function updateView() {
       if (!currentLat || !targetLat) return;
 
-      // 距離と目標の方位角を計算
       const dist = calcDistance(currentLat, currentLng, targetLat, targetLng);
       const targetBearing = calcBearing(currentLat, currentLng, targetLat, targetLng);
 
       document.getElementById('dist-display').innerText = Math.round(dist);
 
-      // 自分の方角と目標の方角の差分を計算
       let angleDiff = targetBearing - currentHeading;
-      // -180 〜 180 の範囲に正規化
       if (angleDiff > 180) angleDiff -= 360;
       if (angleDiff < -180) angleDiff += 360;
 
@@ -159,24 +147,20 @@
 
       const pillar = document.getElementById('light-pillar');
 
-      // 視野角（FOV）内に目標があるか判定し、画面上のX座標（%）に変換
       if (Math.abs(angleDiff) < FOV / 2) {
         pillar.style.display = 'block';
-        // 画面中央(50%)を基準に、角度差に応じて左右に移動
         const screenX = 50 + (angleDiff / (FOV / 2)) * 50; 
         pillar.style.left = screenX + '%';
         
-        // 近づくほど柱を太くする等の表現も可能
         const scale = Math.max(0.5, 50 / Math.max(dist, 1));
         pillar.style.transform = `translateX(-50%) scaleX(${scale})`;
       } else {
-        pillar.style.display = 'none'; // 視野外なら隠す
+        pillar.style.display = 'none';
       }
     }
 
-    // --- ユーティリティ（距離と方位角の計算） ---
     function calcDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371e3; // 地球の半径(m)
+      const R = 6371e3;
       const φ1 = lat1 * Math.PI/180, φ2 = lat2 * Math.PI/180;
       const Δφ = (lat2-lat1) * Math.PI/180, Δλ = (lon2-lon1) * Math.PI/180;
       const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
