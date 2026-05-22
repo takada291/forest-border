@@ -2,22 +2,22 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <title>AR境界</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>AR境界ナビ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; user-select: none; color: white; }
     
-    /* 画面切り替え用の共通スタイル */
+    /* 画面切り替え共通 */
     .screen { display: none; width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
     .screen-active { display: block; }
 
     /* === AR画面 === */
     #camera-view { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; z-index: 1; }
     
-    /* 複数表示される光の柱のスタイル */
+    /* 光の柱 */
     .light-pillar {
       position: absolute; bottom: 0; width: 40px; height: 75vh;
       z-index: 10; transform: translateX(-50%); display: none;
@@ -25,80 +25,83 @@
     }
     .pillar-body { width: 100%; height: 100%; filter: blur(2px); }
     
-    /* 【改善】ARラベルのスタイル：大きく、わかりやすく */
+    /* AR見やすさ改善ラベル */
     .pillar-label {
       position: absolute; top: -55px; left: 50%; transform: translateX(-50%);
       background: rgba(0,0,0,0.85); border: 1px solid white; padding: 4px 8px; border-radius: 6px;
       font-size: 16px; font-weight: bold; white-space: nowrap; line-height: 1.2; text-align: center;
     }
 
-    /* メイン操作パネル（AR画面下部） */
-    #control-panel { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 92%; max-width: 480px; z-index: 20; display: none; }
-    .glass-box { background: rgba(0,0,0,0.7); padding: 12px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }
+    /* 操作パネル（見切れ対策：コンパクト化） */
+    #control-panel { position: absolute; bottom: calc(10px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: 92%; max-width: 440px; z-index: 20; display: none; }
+    .glass-box { background: rgba(0,0,0,0.75); padding: 10px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.6); backdrop-filter: blur(4px); }
     
-    /* 手入力フォーム */
-    .input-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 10px; }
-    .input-form input { background: rgba(255,255,255,0.1); border: 1px solid #555; color: white; padding: 6px; border-radius: 4px; font-size: 14px; flex: 1; min-width: 80px; }
-    .input-form input[type="number"]::-webkit-outer-spin-button, .input-form input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    /* 折りたたみ式手入力フォーム（初期状態非表示） */
+    #manual-input-form { display: none; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 8px; }
+    #manual-input-form input { background: rgba(255,255,255,0.15); border: 1px solid #666; color: white; padding: 6px; border-radius: 4px; font-size: 14px; flex: 1; min-width: 70px; }
+    #manual-input-form input[type="number"]::-webkit-outer-spin-button, #manual-input-form input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
-    /* コントロール群 */
-    .control-row { display: flex; justify-content: space-around; align-items: center; margin-bottom: 10px; }
-    .nav-buttons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+    .control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 14px; }
+    .nav-buttons { display: flex; gap: 6px; justify-content: center; width: 100%; }
 
-    /* 共通ボタンスタイル */
-    .btn { padding: 10px 18px; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; white-space: nowrap; }
-    .btn-blue { background: #007bff; } .btn-green { background: #28a745; } .btn-orange { background: #ff9800; } .btn-red { background: #dc3545; }
-    .btn-add { padding: 6px 12px; font-size: 13px; } /* 手入力用 */
+    /* ボタンスタイル */
+    .btn { padding: 8px 14px; border: none; border-radius: 6px; font-size: 13px; font-weight: bold; cursor: pointer; color: white; white-space: nowrap; }
+    .btn-blue { background: #007bff; } .btn-green { background: #28a745; } .btn-orange { background: #ff9800; } .btn-red { background: #dc3545; } .btn-gray { background: #555; }
+    .btn-full { width: 100%; margin-bottom: 6px; padding: 6px; font-size: 12px; }
 
-    /* === 地図画面・一覧画面共通 === */
-    .screen-header { height: 60px; background: #333; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; box-sizing: border-box; }
-    .screen-title { font-weight:bold; font-size: 16px; }
+    /* === 地図・一覧画面共通 === */
+    .screen-header { height: 50px; background: #222; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; box-sizing: border-box; border-bottom: 1px solid #444; }
+    .screen-title { font-weight:bold; font-size: 15px; }
 
     /* === 地図画面 === */
-    #map { width: 100%; height: calc(100vh - 60px); }
+    #map { width: 100%; height: calc(100vh - 50px); }
 
     /* === 一覧画面 === */
-    #point-list-screen { background: #1a1a1a; }
-    #point-list-content { width: 100%; height: calc(100vh - 60px); overflow-y: auto; padding: 15px; box-sizing: border-box; }
-    .list-item { background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+    #point-list-screen { background: #111; }
+    #point-list-content { width: 100%; height: calc(100vh - 50px); overflow-y: auto; padding: 12px; box-sizing: border-box; }
+    .list-item { background: rgba(255,255,255,0.06); padding: 10px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1); }
     .list-item-info { font-size: 13px; line-height: 1.4; }
-    .list-item-coord { color: #bbb; }
+    .list-item-coord { color: #aaa; font-size: 12px; font-family: monospace; }
     
     /* === スタート画面 === */
-    #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #222; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-    
-    /* アイコン追加 */
-    #app-icon { width: 96px; height: 96px; margin-bottom: 20px; border-radius: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+    #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+    #app-icon { width: 90px; height: 90px; margin-bottom: 15px; border-radius: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.6); }
   </style>
 </head>
 <body>
 
   <div id="start-overlay">
-    <img id="app-icon" src="forestry-ar-icon.png" alt="AR境界">
-    <h2>AR境界ナビ</h2>
-    <p>カメラ・GPS・コンパスを使用します</p>
-    <button class="btn btn-blue" style="font-size:18px; padding:15px 30px; margin-top:20px;" onclick="initApp()">アプリを起動する</button>
+    <img id="app-icon" src="forestry-ar-icon.png" alt="ARアイコン">
+    <h2 style="margin: 5px 0 10px 0; font-size: 20px;">AR境界ナビ</h2>
+    <p style="color: #ccc; margin: 0 0 20px 0; font-size: 14px;">カメラ・GPS・コンパスを使用します</p>
+    <button class="btn btn-blue" style="font-size:16px; padding:12px 24px;" onclick="initApp()">ARアプリを起動</button>
   </div>
 
   <div id="ar-screen" class="screen screen-active">
     <video id="camera-view" autoplay playsinline muted></video>
     <div id="pillars-container"></div>
+    
     <div id="control-panel">
       <div class="glass-box">
-        <div class="input-form">
-          <input type="text" id="manual-name" placeholder="点名 (例: P6)">
+        <button class="btn btn-gray btn-full" id="toggle-form-btn" onclick="toggleForm()">➕ 座標を手入力する</button>
+        <div id="manual-input-form">
+          <input type="text" id="manual-name" placeholder="点名 (例: P1)">
           <input type="number" id="manual-lat" placeholder="緯度 (36.xxx)" step="0.000001">
           <input type="number" id="manual-lng" placeholder="経度 (136.xxx)" step="0.000001">
-          <button class="btn btn-green btn-add" onclick="manualAddPoint()">追加</button>
+          <button class="btn btn-green" style="padding: 5px 10px; font-size: 12px;" onclick="manualAddPoint()">追加</button>
         </div>
+
         <div class="control-row">
-          <div>登録数: <span id="count-display" style="font-size:1.2em; font-weight:bold; color:#fff;">0</span></div>
-          <button class="btn btn-orange" style="padding:6px 12px; font-size:12px;" onclick="toggleFlip()">🔄 180度反転</button>
-          <button class="btn btn-red" style="padding:6px 12px; font-size:12px;" onclick="clearPoints()">🗑 クリア</button>
+          <div>登録ポイント数: <span id="count-display" style="font-size:16px; font-weight:bold; color:#28a745;">0</span></div>
+          <div style="display: flex; gap: 5px;">
+            <button class="btn btn-orange" style="padding:4px 8px; font-size:11px;" onclick="toggleFlip()">🔄 180度反転</button>
+            <button class="btn btn-red" style="padding:4px 8px; font-size:11px;" onclick="clearPoints()">🗑 クリア</button>
+          </div>
         </div>
+
         <div class="nav-buttons">
-          <button class="btn btn-blue" onclick="showMapScreen()">🗺 地図で追加</button>
-          <button class="btn btn-blue" onclick="showListScreen()">📄 座標一覧</button>
+          <button class="btn btn-blue" style="flex: 1;" onclick="showMapScreen()">🗺 地図で追加</button>
+          <button class="btn btn-blue" style="flex: 1;" onclick="showListScreen()">📄 座標一覧</button>
         </div>
       </div>
     </div>
@@ -106,7 +109,7 @@
 
   <div id="map-screen" class="screen">
     <div class="screen-header">
-      <span class="screen-title">地図タップで追加</span>
+      <span class="screen-title">地図タップで境界点追加</span>
       <button class="btn btn-blue" onclick="showArScreen()">AR画面に戻る</button>
     </div>
     <div id="map"></div>
@@ -117,27 +120,25 @@
       <span class="screen-title">登録座標一覧</span>
       <button class="btn btn-blue" onclick="showArScreen()">AR画面に戻る</button>
     </div>
-    <div id="point-list-content">
-      </div>
+    <div id="point-list-content"></div>
   </div>
 
   <script>
-    const STORAGE_KEY = 'forestry_ar_points'; // localStorage用のキー
+    const STORAGE_KEY = 'forestry_ar_points_v2';
     let currentLat = null, currentLng = null;
     let currentHeading = 0, headingOffset = 0;
     let points = []; 
-    const FOV = FOV = 60; 
+    const FOV = 60; 
     let map = null, markerGroup = null;
 
-    // ページロード時にlocalStorageからポイントを読み込む
     loadPoints();
 
-    // 1. アプリ初期化
+    // アプリ初期化
     async function initApp() {
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         try {
           const permission = await DeviceOrientationEvent.requestPermission();
-          if (permission !== 'granted') return alert('コンパスが拒否されました。');
+          if (permission !== 'granted') return alert('コンパスが拒否されました。設定を確認してください。');
         } catch (e) { console.error(e); }
       }
       try {
@@ -154,43 +155,61 @@
       document.getElementById('start-overlay').style.display = 'none';
       document.getElementById('control-panel').style.display = 'block';
       
-      initLeafletMap();
-      updateUI(); // 初回UI更新
-      updateView(); // 初回AR描画
+      updateUI();
+      updateView();
     }
 
-    // 2. 地理院地図の初期化
-    function initLeafletMap() {
-      if (map) return; // 既に初期化済みなら何もしない
-      map = L.map('map').setView([36.058, 136.251], 14);
+    // 【改善】地図画面への遷移とサイズ不具合の確実な修正
+    function showMapScreen() {
+      showScreen('map-screen');
       
-      const gsiStdLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
-        attribution: "<a href='https://maps.gsi.go.jp/development/ichiran.html' target='_blank'>地理院地図</a>"
-      }).addTo(map);
+      // 最初の一回だけ地図オブジェクトを作成
+      if (!map) {
+        map = L.map('map').setView([currentLat || 36.058, currentLng || 136.251], 16);
+        
+        const gsiStdLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
+          attribution: "<a href='https://maps.gsi.go.jp/development/ichiran.html' target='_blank'>地理院地図</a>"
+        }).addTo(map);
 
-      const gsiPhotoLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {
-        attribution: "<a href='https://maps.gsi.go.jp/development/ichiran.html' target='_blank'>地理院地図</a>"
-      });
+        const gsiPhotoLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {
+          attribution: "<a href='https://maps.gsi.go.jp/development/ichiran.html' target='_blank'>地理院地図</a>"
+        });
 
-      L.control.layers({"地図/等高線": gsiStdLayer, "写真": gsiPhotoLayer}, null, {collapsed:false}).addTo(map);
-      markerGroup = L.layerGroup().addTo(map);
+        L.control.layers({"等高線/標準": gsiStdLayer, "空中写真": gsiPhotoLayer}, null, {collapsed:false}).addTo(map);
+        markerGroup = L.layerGroup().addTo(map);
 
-      // 地図タップ時のイベント
-      map.on('click', function(e) {
-        const pName = prompt('点名を入力してください。', `P${points.length + 1}`);
-        if(pName === null) return; // キャンセルされたら何もしない
-        points.push({ lat: e.latlng.lat, lng: e.latlng.lng, name: pName || `P${points.length + 1}` });
-        savePoints(); // ポイントを保存
+        map.on('click', function(e) {
+          const pName = prompt('点名を入力してください。', `P${points.length + 1}`);
+          if (pName === null) return;
+          points.push({ lat: e.latlng.lat, lng: e.latlng.lng, name: pName || `P${points.length + 1}` });
+          savePoints();
+          updateUIAndMarkers();
+        });
+      }
+
+      // 【重要】画面が表示状態（display:block）になった直後に再描画をかける
+      setTimeout(() => {
+        map.invalidateSize();
+        if (currentLat && currentLng) map.setView([currentLat, currentLng], 16);
         updateUIAndMarkers();
-        updateView();
-      });
-      updateUIAndMarkers(); // 初期マーカー描画
+      }, 100);
     }
 
-    // 3. ポイント追加の共通処理
+    // 手入力フォームの展開・折りたたみ
+    function toggleForm() {
+      const form = document.getElementById('manual-input-form');
+      const btn = document.getElementById('toggle-form-btn');
+      if (form.style.display === 'flex') {
+        form.style.display = 'none';
+        btn.innerText = '➕ 座標を手入力する';
+      } else {
+        form.style.display = 'flex';
+        btn.innerText = '➖ 入力フォームを閉じる';
+      }
+    }
+
     function updateUIAndMarkers() {
-      // 地図上のマーカーをクリアして再配置
-      if(markerGroup) {
+      if (markerGroup) {
         markerGroup.clearLayers();
         points.forEach(p => {
           L.marker([p.lat, p.lng]).addTo(markerGroup).bindPopup(p.name);
@@ -199,7 +218,6 @@
       updateUI();
     }
 
-    // 4. 【追加】手入力でのポイント追加
     function manualAddPoint() {
       const nameInput = document.getElementById('manual-name');
       const latInput = document.getElementById('manual-lat');
@@ -209,49 +227,31 @@
       const lat = parseFloat(latInput.value);
       const lng = parseFloat(lngInput.value);
       
-      if(isNaN(lat) || isNaN(lng)) {
-        alert('緯度、経度を数値で入力してください。');
-        return;
-      }
+      if (isNaN(lat) || isNaN(lng)) return alert('緯度、経度を正しく入力してください。');
       
       points.push({ lat: lat, lng: lng, name: name });
-      savePoints(); // ポイントを保存
-      updateUIAndMarkers();
+      savePoints();
+      updateUI();
       updateView();
       
-      // 入力欄をクリア
-      nameInput.value = '';
-      latInput.value = '';
-      lngInput.value = '';
-      
-      alert(`「${name}」を追加しました。AR画面で向きを確認してください。`);
+      nameInput.value = ''; latInput.value = ''; lngInput.value = '';
+      toggleForm(); // 入力後自動で閉じる
+      alert(`「${name}」を追加しました。`);
     }
 
-    // 5. 【追加】画面遷移関数
     function showScreen(screenId) {
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('screen-active'));
       document.getElementById(screenId).classList.add('screen-active');
     }
 
-    function showArScreen() { showScreen('ar-screen'); }
-    function showMapScreen() {
-      showScreen('map-screen');
-      if(map) {
-        map.invalidateSize();
-        if(currentLat && currentLng) map.setView([currentLat, currentLng], 16);
-      }
-    }
-    function showListScreen() {
-      showScreen('point-list-screen');
-      updatePointList();
-    }
+    function showArScreen() { showScreen('ar-screen'); updateView(); }
+    function showListScreen() { showScreen('point-list-screen'); updatePointList(); }
 
-    // 6. 【追加】座標一覧リストの生成
     function updatePointList() {
       const content = document.getElementById('point-list-content');
       content.innerHTML = '';
-      if(points.length === 0) {
-        content.innerHTML = '<p style="text-align:center; color:#bbb;">ポイント未登録</p>';
+      if (points.length === 0) {
+        content.innerHTML = '<p style="text-align:center; color:#bbb; margin-top:40px;">ポイント未登録</p>';
         return;
       }
       points.forEach((p, index) => {
@@ -261,7 +261,7 @@
               <div style="font-weight:bold; font-size:15px; color:#fff;">${p.name}</div>
               <div class="list-item-coord">緯度: ${p.lat.toFixed(6)}<br>経度: ${p.lng.toFixed(6)}</div>
             </div>
-            <button class="btn btn-red btn-add" style="font-size:12px; padding:6px 10px;" onclick="deletePoint(${index})">削除</button>
+            <button class="btn btn-red" style="font-size:12px; padding:5px 10px;" onclick="deletePoint(${index})">削除</button>
           </div>
         `;
         content.insertAdjacentHTML('beforeend', item);
@@ -269,31 +269,28 @@
     }
 
     function deletePoint(index) {
-      if(!confirm('このポイントを削除しますか？')) return;
+      if (!confirm('このポイントを削除しますか？')) return;
       points.splice(index, 1);
-      savePoints(); // ポイントを保存
-      updatePointList(); // リスト画面を更新
-      updateUIAndMarkers(); // 他の画面も更新
-      updateView();
+      savePoints();
+      updatePointList();
+      updateUI();
     }
 
-    // 7. 【追加】ポイントの保存と読み込み (localStorage)
     function savePoints() { localStorage.setItem(STORAGE_KEY, JSON.stringify(points)); }
     function loadPoints() {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if(stored) points = JSON.parse(stored);
+      if (stored) points = JSON.parse(stored);
     }
 
     function clearPoints() {
-      if(!confirm('登録したすべてのポイントをクリアしますか？')) return;
+      if (!confirm('すべてのポイントを削除しますか？')) return;
       points = [];
-      savePoints(); // ポイントを保存
-      updateUIAndMarkers();
+      savePoints();
+      updateUI();
       updateView();
     }
 
     function toggleFlip() { headingOffset = headingOffset === 0 ? 180 : 0; updateView(); }
-
     function updateUI() { document.getElementById('count-display').innerText = points.length; }
 
     function handleOrientation(event) {
@@ -304,13 +301,13 @@
       updateView();
     }
 
-    // 8. 複数AR描画 
+    // 【改善】複数AR描画 ＆ 近距離スケール無限拡大バグ修正
     function updateView() {
       if (!currentLat || points.length === 0 || !document.getElementById('ar-screen').classList.contains('screen-active')) return;
       const container = document.getElementById('pillars-container');
       container.innerHTML = ''; 
 
-      points.forEach((p, index) => {
+      points.forEach((p) => {
         const dist = calcDistance(currentLat, currentLng, p.lat, p.lng);
         const targetBearing = calcBearing(currentLat, currentLng, p.lat, p.lng);
 
@@ -318,16 +315,18 @@
         if (angleDiff > 180) angleDiff -= 360;
         if (angleDiff < -180) angleDiff += 360;
 
+        // 視野角内に入っている場合のみ表示
         if (Math.abs(angleDiff) < FOV / 2) {
           const screenX = 50 + (angleDiff / (FOV / 2)) * 50;
-          const scale = Math.max(0.3, 40 / Math.max(dist, 1));
+          
+          // 【バグ修正】distが0に近づいた時、scaleが無限大になって消え去るのを防ぐ（最大3.0倍に制限）
+          const scale = Math.min(3.0, Math.max(0.3, 40 / Math.max(dist, 1)));
 
           let hue = 0; 
           if (dist < 50) hue = (dist / 50) * 60; 
           else if (dist < 150) hue = 60 + ((dist - 50) / 100) * 160; 
           else hue = 220;
 
-          // 【改善】ラベルを大きく、2行に。中央揃えで配置
           const pillarHtml = `
             <div class="light-pillar" style="display:block; left:${screenX}%; transform:translateX(-50%) scaleX(${scale});">
               <div class="pillar-label">${p.name}<br>${Math.round(dist)} m</div>
@@ -342,37 +341,4 @@
     function calcDistance(lat1, lon1, lat2, lon2) {
       const R = 6371e3;
       const φ1 = lat1 * Math.PI/180, φ2 = lat2 * Math.PI/180;
-      const Δφ = (lat2-lat1) * Math.PI/180, Δλ = (lon2-lon1) * Math.PI/180;
-      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    }
-    function calcBearing(lat1, lon1, lat2, lon2) {
-      const φ1 = lat1 * Math.PI/180, φ2 = lat2 * Math.PI/180;
-      const λ1 = lon1 * Math.PI/180, λ2 = lon2 * Math.PI/180;
-      const y = Math.sin(λ2-λ1) * Math.cos(φ2);
-      const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
-      return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-    }
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').then(reg => {
-        reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing;
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              window.location.reload();
-            }
-          });
-        });
-      });
-      let refreshing = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!refreshing) {
-          window.location.reload();
-          refreshing = true;
-        }
-      });
-    }
-  </script>
-</body>
-</html>
+      const Δφ = (lat2-lat1) * Math.PI/
