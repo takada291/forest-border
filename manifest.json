@@ -1,5 +1,5 @@
 {
-  "short_name": "AR境界",
+  "short_name": "AR境界ナビ",
   "name": "AR境界ナビ",
   "icons": [
     {
@@ -10,7 +10,7 @@
     }
   ],
   "start_url": "index.html",
-  "background_color": "#222222",
+  "background_color": "#1a1a1a",
   "theme_color": "#007bff",
   "display": "standalone",
   "orientation": "portrait"
