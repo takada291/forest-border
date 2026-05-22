@@ -1,96 +1,91 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
   <meta charset="utf-8">
-  <title>軽量版 境界AR (180度反転機能付き)</title>
+  <title>林業AR境界ナビ</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
-    body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
+    body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; user-select: none; }
+    #camera-view { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; z-index: 1; }
     
-    #camera-view {
-      position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-      object-fit: cover; z-index: 1;
+    /* 複数表示される光の柱のベーススタイル */
+    .light-pillar {
+      position: absolute; bottom: 0; width: 40px; height: 75vh;
+      z-index: 10; transform: translateX(-50%); display: none;
+      transition: left 0.05s ease-out; text-align: center; color: white;
     }
+    .pillar-body { width: 100%; height: 100%; filter: blur(2px); }
+    .pillar-label { position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 2px 6px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
 
-    #light-pillar {
-      position: absolute; bottom: 0; width: 60px; height: 80vh;
-      background: linear-gradient(to top, rgba(255, 255, 0, 0.8), rgba(255, 255, 0, 0));
-      box-shadow: 0 0 20px rgba(255, 255, 0, 0.8);
-      z-index: 10; transform: translateX(-50%);
-      display: none; transition: left 0.1s ease-out;
-    }
+    /* UIレイヤー */
+    #control-panel { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; z-index: 20; display: none; }
+    .glass-box { background: rgba(0,0,0,0.65); color: white; padding: 12px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); text-align: center; }
+    .btn { padding: 10px 15px; border: none; border-radius: 5px; font-size: 14px; font-weight: bold; cursor: pointer; margin: 4px; color: white; }
+    .btn-blue { background: #007bff; } .btn-green { background: #28a745; } .btn-orange { background: #ff9800; }
+    
+    /* 地図モーダル表示 */
+    #map-modal { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 50; display: none; background: white; }
+    #map { width: 100%; height: calc(100vh - 60px); }
+    .map-header { height: 60px; background: #333; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; color: white; box-sizing: border-box; }
 
-    #info-panel {
-      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.6); color: white;
-      padding: 10px 20px; border-radius: 8px;
-      z-index: 20; text-align: center; width: 80%;
-    }
-
-    /* 新しく追加した反転ボタンのスタイル */
-    .flip-btn {
-      margin-top: 10px; padding: 8px;
-      background-color: #ff9800; color: white;
-      border: none; border-radius: 5px; cursor: pointer; width: 100%;
-    }
-
-    #ui-layer {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.8); z-index: 100;
-      display: flex; flex-direction: column; justify-content: center; align-items: center;
-    }
-    .panel { background: white; padding: 20px; border-radius: 10px; width: 80%; max-width: 300px; text-align: center; }
-    input { width: 90%; padding: 10px; margin-bottom: 10px; font-size: 16px; }
-    button.start { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
-    button.action { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin-bottom: 10px;}
+    /* スタート画面 */
+    #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #222; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; }
+    
+    /* リスト確認用（簡易表示） */
+    #point-list-info { font-size: 11px; margin-top: 5px; max-height: 40px; overflow-y: auto; text-align: left; background: rgba(21, 21, 21, 0.5); padding: 4px; }
   </style>
 </head>
 <body>
 
   <video id="camera-view" autoplay playsinline muted></video>
-  <div id="light-pillar"></div>
+  
+  <div id="pillars-container"></div>
 
-  <div id="info-panel" style="display:none;">
-    距離: <span id="dist-display">--</span> m<br>
-    方角差: <span id="angle-display">--</span>°
-    <button class="flip-btn" onclick="toggleFlip()">🔄 向きを180度反転</button>
+  <div id="control-panel">
+    <div class="glass-box">
+      <div>登録ポイント数: <span id="count-display">0</span></div>
+      <div id="point-list-info">ポイント未登録</div>
+      <div style="margin-top: 8px;">
+        <button class="btn btn-blue" onclick="openMapModal()">🗺 地図から追加</button>
+        <button class="btn btn-orange" onclick="toggleFlip()">🔄 180度反転</button>
+        <button class="btn style" style="background:#dc3545;" onclick="clearPoints()">🗑 クリア</button>
+      </div>
+    </div>
   </div>
 
-  <div id="ui-layer">
-    <div class="panel" id="step-start">
-      <h3>軽量ARモード</h3>
-      <button class="start" onclick="initApp()">カメラとコンパスを起動</button>
+  <div id="map-modal">
+    <div class="map-header">
+      <span style="font-weight:bold;">地図タップで境界点追加</span>
+      <button class="btn btn-orange" onclick="closeMapModal()">AR画面に戻る</button>
     </div>
+    <div id="map"></div>
+  </div>
 
-    <div class="panel" id="step-input" style="display:none;">
-      <p>目標の緯度・経度</p>
-      <input type="number" id="lat-input" placeholder="緯度 (例: 36.058)" step="0.000001">
-      <input type="number" id="lng-input" placeholder="経度 (例: 136.251)" step="0.000001">
-      <button class="action" onclick="setTarget()">探索開始</button>
-    </div>
+  <div id="start-overlay">
+    <h2>林業AR境界ナビ</h2>
+    <p>カメラ・GPS・コンパスを使用します</p>
+    <button class="btn btn-blue" style="font-size:18px; padding:15px 30px;" onclick="initApp()">アプリを起動する</button>
   </div>
 
   <script>
     let currentLat = null, currentLng = null;
-    let targetLat = null, targetLng = null;
-    let currentHeading = 0; 
-    let headingOffset = 0; // 反転用のオフセット角（0か180）を追加
-    const FOV = 60; 
+    let currentHeading = 0, headingOffset = 0;
+    let points = []; // 境界点の配列 [{lat, lng, name}]
+    const FOV = 60; // 視野角
+    let map = null, markerGroup = null;
+    let gsiStdLayer, gsiPhotoLayer;
 
-    // 反転ボタンが押された時の処理
-    function toggleFlip() {
-      headingOffset = headingOffset === 0 ? 180 : 0;
-      updateView();
-    }
-
+    // 1. アプリ初期化とPWA更新検出
     async function initApp() {
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         try {
           const permission = await DeviceOrientationEvent.requestPermission();
-          if (permission !== 'granted') return alert('コンパスが許可されませんでした。');
+          if (permission !== 'granted') return alert('コンパスが拒否されました。');
         } catch (e) { console.error(e); }
       }
-
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         document.getElementById('camera-view').srcObject = stream;
@@ -99,66 +94,113 @@
       window.addEventListener('deviceorientation', handleOrientation, true);
       navigator.geolocation.watchPosition(
         pos => { currentLat = pos.coords.latitude; currentLng = pos.coords.longitude; updateView(); },
-        err => console.warn('GPS Error'),
-        { enableHighAccuracy: true }
+        err => console.warn('GPS Error'), { enableHighAccuracy: true }
       );
 
-      document.getElementById('step-start').style.display = 'none';
-      document.getElementById('step-input').style.display = 'block';
+      document.getElementById('start-overlay').style.display = 'none';
+      document.getElementById('control-panel').style.display = 'block';
+      initLeafletMap();
     }
 
-    function setTarget() {
-      targetLat = parseFloat(document.getElementById('lat-input').value);
-      targetLng = parseFloat(document.getElementById('lng-input').value);
-      if (!targetLat || !targetLng) return alert('座標を入力してください');
+    // 2. 地理院地図（Leaflet）の初期化
+    function initLeafletMap() {
+      map = L.map('map').setView([36.058, 136.251], 14);
+      
+      // 国土地理院 標準地図タイル
+      gsiStdLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
+        attribution: "<a href='https://maps.gsi.go.jp/development/ichiran.html' target='_blank'>地理院地図</a>"
+      }).addTo(map);
 
-      document.getElementById('ui-layer').style.display = 'none';
-      document.getElementById('info-panel').style.display = 'block';
-      updateView();
+      // 国土地理院 空中写真タイル
+      gsiPhotoLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {
+        attribution: "<a href='https://maps.gsi.go.jp/development/ichiran.html' target='_blank'>地理院地図</a>"
+      });
+
+      // レイヤー切り替えスイッチの配置
+      L.control.layers({"標準地図/等高線": gsiStdLayer, "空中写真": gsiPhotoLayer}, null, {collapsed:false}).addTo(map);
+      markerGroup = L.layerGroup().addTo(map);
+
+      // 地図タップ時のイベント
+      map.on('click', function(e) {
+        const pName = `P${points.length + 1}`;
+        points.push({ lat: e.latlng.lat, lng: e.latlng.lng, name: pName });
+        
+        // 地図上にピンを立てる
+        L.marker([e.latlng.lat, e.latlng.lng]).addTo(markerGroup).bindPopup(pName).openPopup();
+        
+        updateUI();
+        updateView();
+      });
     }
 
-    // コンパスの処理（オフセットを足すように修正）
+    function openMapModal() {
+      document.getElementById('map-modal').style.display = 'block';
+      if(map) {
+        map.invalidateSize(); // モーダル表示時の地図描画バグ防止
+        if(currentLat && currentLng) map.setView([currentLat, currentLng], 16);
+      }
+    }
+    function closeMapModal() { document.getElementById('map-modal').style.display = 'none'; }
+    function toggleFlip() { headingOffset = headingOffset === 0 ? 180 : 0; updateView(); }
+    function clearPoints() { points = []; markerGroup.clearLayers(); updateUI(); updateView(); }
+
+    function updateUI() {
+      document.getElementById('count-display').innerText = points.length;
+      const info = document.getElementById('point-list-info');
+      if(points.length === 0) { info.innerText = "ポイント未登録"; return; }
+      info.innerText = points.map(p => `${p.name}:(${p.lat.toFixed(4)},${p.lng.toFixed(4)})`).join(' / ');
+    }
+
     function handleOrientation(event) {
       let rawHeading = 0;
-      if (event.webkitCompassHeading) {
-        rawHeading = event.webkitCompassHeading;
-      } else if (event.alpha !== null) {
-        rawHeading = 360 - event.alpha;
-      }
-      
-      // ボタンで設定したオフセット（0度か180度）を足して、360度で丸める
+      if (event.webkitCompassHeading) rawHeading = event.webkitCompassHeading;
+      else if (event.alpha !== null) rawHeading = 360 - event.alpha;
       currentHeading = (rawHeading + headingOffset) % 360;
       updateView();
     }
 
+    // 3. 複数AR描画 & 距離別色分けロジック
     function updateView() {
-      if (!currentLat || !targetLat) return;
+      if (!currentLat || points.length === 0) return;
+      const container = document.getElementById('pillars-container');
+      container.innerHTML = ''; // 一度リセットして再描画
 
-      const dist = calcDistance(currentLat, currentLng, targetLat, targetLng);
-      const targetBearing = calcBearing(currentLat, currentLng, targetLat, targetLng);
+      points.forEach((p, index) => {
+        const dist = calcDistance(currentLat, currentLng, p.lat, p.lng);
+        const targetBearing = calcBearing(currentLat, currentLng, p.lat, p.lng);
 
-      document.getElementById('dist-display').innerText = Math.round(dist);
+        let angleDiff = targetBearing - currentHeading;
+        if (angleDiff > 180) angleDiff -= 360;
+        if (angleDiff < -180) angleDiff += 360;
 
-      let angleDiff = targetBearing - currentHeading;
-      if (angleDiff > 180) angleDiff -= 360;
-      if (angleDiff < -180) angleDiff += 360;
+        if (Math.abs(angleDiff) < FOV / 2) {
+          const screenX = 50 + (angleDiff / (FOV / 2)) * 50;
+          const scale = Math.max(0.3, 40 / Math.max(dist, 1));
 
-      document.getElementById('angle-display').innerText = Math.round(angleDiff);
+          // --- 距離に応じた色分け (HSLカラーシステムを使用) ---
+          // 0m = 赤(0), 50m = 黄(60), 150m以上 = 青(220) に動的変化
+          let hue = 0; 
+          if (dist < 50) {
+            hue = (dist / 50) * 60; // 0m(赤)〜50m(黄)
+          } else if (dist < 150) {
+            hue = 60 + ((dist - 50) / 100) * 160; // 50m(黄)〜150m(青)
+          } else {
+            hue = 220; // 150m以上は固定の寒色(青)
+          }
 
-      const pillar = document.getElementById('light-pillar');
-
-      if (Math.abs(angleDiff) < FOV / 2) {
-        pillar.style.display = 'block';
-        const screenX = 50 + (angleDiff / (FOV / 2)) * 50; 
-        pillar.style.left = screenX + '%';
-        
-        const scale = Math.max(0.5, 50 / Math.max(dist, 1));
-        pillar.style.transform = `translateX(-50%) scaleX(${scale})`;
-      } else {
-        pillar.style.display = 'none';
-      }
+          // 光の柱のエレメント作成
+          const pillarHtml = `
+            <div class="light-pillar" style="display:block; left:${screenX}%; transform:translateX(-50%) scaleX(${scale});">
+              <div class="pillar-label">${p.name} (${Math.round(dist)}m)</div>
+              <div class="pillar-body" style="background: linear-gradient(to top, hsla(${hue}, 100%, 50%, 0.8), hsla(${hue}, 100%, 50%, 0)); box-shadow: 0 0 15px hsla(${hue}, 100%, 50%, 0.6);"></div>
+            </div>
+          `;
+          container.insertAdjacentHTML('beforeend', pillarHtml);
+        }
+      });
     }
 
+    // 距離・方位角の計算式
     function calcDistance(lat1, lon1, lat2, lon2) {
       const R = 6371e3;
       const φ1 = lat1 * Math.PI/180, φ2 = lat2 * Math.PI/180;
@@ -166,13 +208,36 @@
       const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
-
     function calcBearing(lat1, lon1, lat2, lon2) {
       const φ1 = lat1 * Math.PI/180, φ2 = lat2 * Math.PI/180;
       const λ1 = lon1 * Math.PI/180, λ2 = lon2 * Math.PI/180;
       const y = Math.sin(λ2-λ1) * Math.cos(φ2);
       const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
       return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    }
+
+    // 4. 強制キャッシュ更新用PWA登録スクリプト
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        // 新しいサービスワーカーが待機状態に入ったら即時適用を促す
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              // アップデート検知時に自動リロード
+              window.location.reload();
+            }
+          });
+        });
+      });
+      // サービスワーカーが切り替わったら画面を強制リロードして最新キャッシュを読み込む
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          window.location.reload();
+          refreshing = true;
+        }
+      });
     }
   </script>
 </body>
