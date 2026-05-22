@@ -40,8 +40,18 @@
     .pillar-body { width: 100%; height: 100%; filter: blur(2px); }
     .pillar-label { position: absolute; top: -55px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); border: 1px solid white; padding: 4px 8px; border-radius: 6px; font-size: 16px; font-weight: bold; white-space: nowrap; line-height: 1.2; text-align: center; }
 
-    /* 操作パネル（見切れ対策：パディングと上下マージンを極限まで縮小） */
-    #control-panel { position: absolute; bottom: calc(6px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: 94%; max-width: 420px; z-index: 20; display: none; }
+    /* 【変更点】操作パネルを画面上部に配置 (ノッチ対応のsafe-area-inset-topを使用) */
+    #control-panel { 
+      position: absolute; 
+      top: calc(10px + env(safe-area-inset-top)); 
+      left: 50%; 
+      transform: translateX(-50%); 
+      width: 94%; 
+      max-width: 420px; 
+      z-index: 20; 
+      display: none; 
+    }
+    
     .glass-box { background: rgba(0,0,0,0.8); padding: 8px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.6); }
     
     #manual-input-form { display: none; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 6px; }
@@ -49,7 +59,6 @@
     .control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px; }
     .nav-buttons { display: flex; gap: 5px; justify-content: center; width: 100%; }
 
-    /* ボタンのコンパクト化 */
     .btn { padding: 7px 12px; border: none; border-radius: 5px; font-size: 12px; font-weight: bold; cursor: pointer; color: white; white-space: nowrap; }
     .btn-blue { background: #007bff; } .btn-green { background: #28a745; } .btn-orange { background: #ff9800; } .btn-red { background: #dc3545; } .btn-gray { background: #555; }
     .btn-full { width: 100%; margin-bottom: 5px; padding: 5px; font-size: 11px; }
@@ -66,7 +75,6 @@
     #app-icon { width: 80px; height: 80px; margin-bottom: 12px; border-radius: 16px; }
     #error-box { display: none; background: #dc3545; color: white; padding: 10px; margin: 15px; border-radius: 8px; font-size: 12px; width: 80%; word-break: break-all; }
 
-    /* 【新機能】自作の削除確認ダイアログ（カメラ停止を防ぐ） */
     #custom-confirm { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20,20,20,0.95); border: 2px solid #dc3545; padding: 15px; border-radius: 10px; z-index: 2000; text-align: center; width: 75%; max-width: 280px; box-shadow: 0 4px 20px rgba(0,0,0,0.8); }
   </style>
 </head>
@@ -83,7 +91,7 @@
   <div id="start-overlay">
     <img id="app-icon" src="forestry-ar-icon.png" alt="アイコン" onerror="this.style.display='none'">
     <h2 style="margin: 5px 0 0 0; font-size: 18px;">林業AR境界ナビ</h2>
-    <p style="color: #4CAF50; font-weight: bold; margin: 4px 0 15px 0; font-size: 13px;">v2.1.0</p>
+    <p style="color: #4CAF50; font-weight: bold; margin: 4px 0 15px 0; font-size: 13px;">v2.2.0 (Top UI)</p>
     
     <button id="start-btn" class="btn btn-blue" style="font-size:15px; padding:10px 20px; width:75%; max-width:260px;" onclick="initApp()">ARアプリを起動</button>
     <div id="error-box"></div>
@@ -187,7 +195,6 @@
       btn.innerText = 'ARアプリを再起動'; btn.disabled = false;
     }
 
-    // 【改善】地図でのpromptを完全に排除し、地図上のポップアップ内に入力フォームを展開
     function showMapScreen() {
       showScreen('map-screen');
       if (!map) {
@@ -212,7 +219,6 @@
       }, 100);
     }
 
-    // 地図ポップアップ用の確定グローバル関数
     window.addPointFromMap = function(lat, lng) {
       var nameInput = document.getElementById('map-pname');
       var name = nameInput ? nameInput.value : ('P' + (points.length + 1));
@@ -220,14 +226,12 @@
       savePoints(); updateUIAndMarkers(); map.closePopup();
     };
 
-    // 【改善】90度回転ローテーション処理
     function rotateHeading() {
       headingOffset = (headingOffset + 90) % 360;
       document.getElementById('flip-btn-text').innerText = '🔄 補正: ' + headingOffset + '°';
       updateView();
     }
 
-    // 【改善】消去確認のHTMLダイアログ制御（これでiPhoneの動画が死なない）
     function openConfirm() { document.getElementById('custom-confirm').style.display = 'block'; }
     function closeConfirm() { document.getElementById('custom-confirm').style.display = 'none'; }
     function executeClearPoints() {
@@ -297,8 +301,6 @@
     function updateView() {
       var container = document.getElementById('pillars-container'); 
       if (!container) return;
-      
-      // 【バグ修正】登録ポイントがない場合は、コンテナを空にして即座に抜ける
       if (!currentLat || points.length === 0 || !document.getElementById('ar-screen').classList.contains('screen-active')) {
         container.innerHTML = ''; return;
       }
