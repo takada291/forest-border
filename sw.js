@@ -1,4 +1,4 @@
-const CACHE_NAME = 'forestry-ar-v1.1.0'; // アップデート時はここを書き換える
+const CACHE_NAME = 'forestry-ar-v1.1.1'; // アップデート時はここを書き換える
 const ASSETS = [
   'index.html',
   'manifest.json',
