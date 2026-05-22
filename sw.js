@@ -1,4 +1,4 @@
-const CACHE_NAME = 'forestry-ar-v2.0.0'; 
+const CACHE_NAME = 'forestry-ar-v2.1.0'; 
 const ASSETS = [
   'index.html',
   'manifest.json',
@@ -24,9 +24,7 @@ self.addEventListener('activate', event => {
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cache => {
-          if (cache !== CACHE_NAME) {
-            return caches.delete(cache); // v1系の古いキャッシュを全削除
-          }
+          if (cache !== CACHE_NAME) { return caches.delete(cache); }
         })
       );
     }).then(() => self.clients.claim())
