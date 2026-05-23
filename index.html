@@ -20,22 +20,28 @@
         } else { window.location.reload(true); }
       }
     }
+    window.onerror = function(msg, url, line) {
+      var errBox = document.getElementById('error-box');
+      if(errBox) {
+        errBox.style.display = 'block';
+        errBox.innerHTML = "<b>エラー:</b> " + msg + " (L" + line + ")";
+      }
+      return false;
+    };
   </script>
 
   <style>
-    :root { --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom); }
     body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; user-select: none; color: white; }
-    .screen { display: none; width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
-    .screen-active { display: block; }
-
-    /* AR画面 */
-    #camera-view { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; z-index: 1; }
+    
+    /* 【改善】AR画面は最下層で常に表示（display:noneにしないことでカメラを止めない） */
+    #ar-screen { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
+    #camera-view { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+    
     .light-pillar { position: absolute; bottom: 0; width: 40px; height: 75vh; z-index: 10; transform: translateX(-50%); display: none; text-align: center; }
     .pillar-body { width: 100%; height: 100%; filter: blur(2px); }
     .pillar-label { position: absolute; top: -60px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); border: 1px solid white; padding: 4px 10px; border-radius: 8px; font-size: 16px; font-weight: bold; white-space: nowrap; line-height: 1.2; text-align: center; }
 
-    /* 操作パネル（上部） */
-    #control-panel { position: absolute; top: calc(10px + var(--safe-top)); left: 50%; transform: translateX(-50%); width: 94%; max-width: 420px; z-index: 20; display: none; }
+    #control-panel { position: absolute; top: calc(10px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); width: 94%; max-width: 420px; z-index: 20; }
     .glass-box { background: rgba(0,0,0,0.8); padding: 10px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.6); }
     
     .control-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -45,20 +51,36 @@
     .btn-blue { background: #007bff; } .btn-green { background: #28a745; } .btn-orange { background: #ff9800; } .btn-red { background: #dc3545; } .btn-gray { background: #555; }
     .btn-full { width: 100%; margin-bottom: 6px; }
 
-    /* 各画面ヘッダー */
-    .screen-header { height: calc(65px + var(--safe-top)); background: #222; display: flex; justify-content: space-between; align-items: flex-end; padding: 0 15px 12px 15px; box-sizing: border-box; border-bottom: 1px solid #444; z-index: 1000; }
-    .screen-title { font-weight:bold; font-size: 16px; margin-bottom: 2px; }
+    /* 【改善】地図・一覧画面は Flexbox で上から被せる構造に変更 */
+    .overlay-screen { 
+      display: none; 
+      position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; 
+      z-index: 100; 
+      background: #111; 
+      flex-direction: column; 
+      padding-top: env(safe-area-inset-top); /* 上部のノッチ領域を完全に確保 */
+      box-sizing: border-box;
+    }
+    .overlay-screen.active { display: flex; }
 
-    /* 地図・一覧画面 */
-    #map { width: 100%; height: calc(100vh - (65px + var(--safe-top))); }
-    #point-list-screen { background: #111; overflow: hidden; }
-    #point-list-content { width: 100%; height: calc(100vh - (65px + var(--safe-top))); overflow-y: auto; padding: 15px; box-sizing: border-box; }
+    .screen-header { 
+      flex: 0 0 auto; 
+      height: 55px; 
+      background: #222; 
+      display: flex; justify-content: space-between; align-items: center; 
+      padding: 0 15px; border-bottom: 1px solid #444; 
+    }
+    .screen-title { font-weight:bold; font-size: 16px; }
+
+    /* Flexboxの子要素として残りの空間を完全に埋める */
+    #map { flex: 1 1 auto; width: 100%; position: relative; z-index: 1; }
+    #point-list-content { flex: 1 1 auto; overflow-y: auto; padding: 15px; box-sizing: border-box; }
     
     .manual-add-area { background: rgba(255,255,255,0.1); padding: 12px; border-radius: 10px; margin-bottom: 20px; }
     .manual-add-area input { background: rgba(0,0,0,0.3); border: 1px solid #666; color: white; padding: 8px; border-radius: 4px; font-size: 14px; width: calc(100% - 18px); margin-bottom: 8px; }
     .list-item { background: rgba(255,255,255,0.06); padding: 10px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1); }
     
-    /* 測量・ダイアログ・スタート画面 */
+    /* ダイアログ・スタート画面 */
     #survey-modal { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
     .survey-box { background: #333; padding: 25px; border-radius: 20px; width: 85%; max-width: 320px; border: 2px solid #007bff; }
     .progress-bar { width: 100%; height: 10px; background: #555; border-radius: 5px; margin: 15px 0; overflow: hidden; }
@@ -67,8 +89,6 @@
     #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center; }
     #app-icon { width: 80px; height: 80px; margin-bottom: 12px; border-radius: 18px; }
     #custom-confirm { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20,20,20,0.95); border: 2px solid #dc3545; padding: 20px; border-radius: 12px; z-index: 3000; text-align: center; width: 80%; max-width: 300px; }
-    
-    /* 【追加】起動ステータス表示用 */
     #boot-status { margin-top: 15px; font-size: 13px; color: #aaa; text-align: center; min-height: 40px; padding: 0 20px; }
   </style>
 </head>
@@ -100,16 +120,13 @@
   <div id="start-overlay">
     <img id="app-icon" src="forestry-ar-icon.png" alt="ARアイコン">
     <h2 style="margin:5px 0;">林業AR境界ナビ</h2>
-    <p style="color:#4CAF50; font-weight:bold; margin-bottom:10px;">v2.4.1 (起動診断版)</p>
-    
+    <p style="color:#4CAF50; font-weight:bold; margin-bottom:10px;">v2.4.2 (安定化)</p>
     <button id="start-btn" class="btn btn-blue" style="font-size:16px; padding:12px 30px;" onclick="initApp()">ARアプリを起動</button>
-    
     <div id="boot-status">準備完了</div>
-
     <button class="btn btn-gray" style="margin-top:20px; font-size:11px;" onclick="emergencyReset()">不具合リセット</button>
   </div>
 
-  <div id="ar-screen" class="screen screen-active">
+  <div id="ar-screen">
     <video id="camera-view" autoplay playsinline muted></video>
     <div id="pillars-container"></div>
     <div id="control-panel">
@@ -130,7 +147,7 @@
     </div>
   </div>
 
-  <div id="map-screen" class="screen">
+  <div id="map-screen" class="overlay-screen">
     <div class="screen-header">
       <span class="screen-title">地図で座標追加</span>
       <button class="btn btn-blue" onclick="showArScreen()">ARに戻る</button>
@@ -138,7 +155,7 @@
     <div id="map"></div>
   </div>
 
-  <div id="point-list-screen" class="screen">
+  <div id="point-list-screen" class="overlay-screen">
     <div class="screen-header">
       <span class="screen-title">座標管理</span>
       <div style="display:flex; gap:5px;">
@@ -169,7 +186,6 @@
 
     loadPoints();
 
-    // 【大幅改修】起動プロセスのステップ化とエラー詳細表示
     async function initApp() {
       var startBtn = document.getElementById('start-btn');
       var statusText = document.getElementById('boot-status');
@@ -178,29 +194,25 @@
       statusText.style.color = '#fff';
 
       try {
-        // Step 1: HTTPSチェック
         statusText.innerText = 'ステップ1: 通信環境の確認中...';
         if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-          throw new Error("HTTPS環境ではありません。カメラが起動できません。");
+          throw new Error("HTTPS環境ではありません。");
         }
 
-        // Step 2: センサー許可 (iOS対応)
-        statusText.innerText = 'ステップ2: コンパスセンサーの起動中...';
+        statusText.innerText = 'ステップ2: コンパス起動中...';
         if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
           var perm = await DeviceOrientationEvent.requestPermission();
-          if (perm !== 'granted') throw new Error("コンパスへのアクセスが拒否されました。設定を確認してください。");
+          if (perm !== 'granted') throw new Error("コンパスへのアクセスが拒否されました。");
         }
 
-        // Step 3: カメラ起動
-        statusText.innerText = 'ステップ3: カメラの起動中...';
+        statusText.innerText = 'ステップ3: カメラ起動中...';
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          throw new Error("ブラウザのカメラ機能が利用できません。権限を確認してください。");
+          throw new Error("ブラウザのカメラ機能が利用できません。");
         }
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         document.getElementById('camera-view').srcObject = stream;
 
-        // Step 4: センサーとGPSの連携開始
-        statusText.innerText = 'ステップ4: GPS測位の準備中...';
+        statusText.innerText = 'ステップ4: GPS準備中...';
         window.addEventListener('deviceorientation', handleOrientation, true);
         navigator.geolocation.watchPosition(
           function(pos) { currentLat = pos.coords.latitude; currentLng = pos.coords.longitude; updateView(); },
@@ -208,14 +220,11 @@
           { enableHighAccuracy: true }
         );
 
-        // 起動成功
         document.getElementById('start-overlay').style.display = 'none';
-        document.getElementById('control-panel').style.display = 'block';
         updateUI();
 
       } catch (err) {
-        // エラー発生時の処理
-        statusText.innerText = '【エラー発生】\n' + err.message;
+        statusText.innerText = '【エラー】\n' + err.message;
         statusText.style.color = '#ff5555';
         startBtn.innerText = 'もう一度試す';
         startBtn.disabled = false;
@@ -275,9 +284,11 @@
 
     function closeSurvey() { document.getElementById('survey-modal').style.display = 'none'; isSurveying = false; }
 
-    // --- マップ・一覧・UI ---
+    // --- 画面表示制御（表示非表示のロジック変更） ---
     function showMapScreen() {
-      showScreen('map-screen');
+      document.getElementById('point-list-screen').classList.remove('active');
+      document.getElementById('map-screen').classList.add('active');
+      
       if (!map) {
         map = L.map('map').setView([currentLat || 36.058, currentLng || 136.251], 16);
         L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png').addTo(map);
@@ -288,6 +299,18 @@
         });
       }
       setTimeout(() => { map.invalidateSize(); if (currentLat && currentLng) map.setView([currentLat, currentLng], 16); updateUIAndMarkers(); }, 100);
+    }
+
+    function showListScreen() {
+      document.getElementById('map-screen').classList.remove('active');
+      document.getElementById('point-list-screen').classList.add('active');
+      updatePointList();
+    }
+
+    function showArScreen() {
+      document.getElementById('map-screen').classList.remove('active');
+      document.getElementById('point-list-screen').classList.remove('active');
+      updateView();
     }
 
     window.addPointFromMap = function(lat, lng) {
@@ -317,9 +340,6 @@
     function deletePoint(i) { points.splice(i, 1); savePoints(); updatePointList(); updateUI(); }
     function savePoints() { localStorage.setItem(STORAGE_KEY, JSON.stringify(points)); }
     function loadPoints() { var s = localStorage.getItem(STORAGE_KEY); if(s) points = JSON.parse(s); }
-    function showScreen(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('screen-active')); document.getElementById(id).classList.add('screen-active'); }
-    function showArScreen() { showScreen('ar-screen'); updateView(); }
-    function showListScreen() { showScreen('point-list-screen'); updatePointList(); }
     function openConfirm() { document.getElementById('custom-confirm').style.display = 'block'; }
     function closeConfirm() { document.getElementById('custom-confirm').style.display = 'none'; }
     function executeClearPoints() { points = []; savePoints(); updateUI(); updateView(); closeConfirm(); }
@@ -339,7 +359,8 @@
 
     function updateView() {
       var container = document.getElementById('pillars-container');
-      if (!currentLat || points.length === 0 || !document.getElementById('ar-screen').classList.contains('screen-active')) { container.innerHTML = ''; return; }
+      // オーバーレイ表示中もARの描画は更新し続ける
+      if (!currentLat || points.length === 0) { container.innerHTML = ''; return; }
       var html = '';
       points.forEach(p => {
         var dist = calcDistance(currentLat, currentLng, p.lat, p.lng);
