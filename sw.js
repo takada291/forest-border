@@ -1,4 +1,4 @@
-const CACHE_NAME = 'forestry-ar-v2.4.0'; 
+const CACHE_NAME = 'forestry-ar-v2.4.1'; 
 const ASSETS = [
   'index.html',
   'manifest.json',
