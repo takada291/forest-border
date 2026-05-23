@@ -45,9 +45,26 @@
     
     .light-pillar { position: absolute; bottom: 0; width: 40px; height: 75vh; z-index: 10; transform: translateX(-50%); display: none; text-align: center; }
     .pillar-body { width: 100%; height: 100%; filter: blur(2px); }
-    .pillar-label { position: absolute; top: -60px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); border: 1px solid white; padding: 4px 10px; border-radius: 8px; font-size: 16px; font-weight: bold; white-space: nowrap; line-height: 1.2; text-align: center; }
+    
+    /* 【改善】ラベルを光の柱の「ど真ん中（top: 50%）」へ移動し、他のUIと被らないように修正 */
+    .pillar-label { 
+      position: absolute; 
+      top: 50%; 
+      left: 50%; 
+      transform: translate(-50%, -50%); 
+      background: rgba(0,0,0,0.85); 
+      border: 1px solid white; 
+      padding: 4px 10px; 
+      border-radius: 8px; 
+      font-size: 16px; 
+      font-weight: bold; 
+      white-space: nowrap; 
+      line-height: 1.2; 
+      text-align: center; 
+      z-index: 20; 
+    }
 
-    /* 【変更】操作パネルを上部配置へ戻す（4段レイアウトは維持） */
+    /* 操作パネル（上部配置・4段レイアウト） */
     #control-panel { position: absolute; top: calc(15px + var(--safe-top)); left: 50%; transform: translateX(-50%); width: 94%; max-width: 420px; z-index: 20; }
     .glass-box { background: rgba(0,0,0,0.85); padding: 15px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.8); backdrop-filter: blur(4px); }
     
@@ -132,7 +149,7 @@
   <div id="start-overlay">
     <img src="forestry-ar-icon.png" alt="AR" style="width:90px; border-radius:18px; margin-bottom:15px;" onerror="this.style.display='none'">
     <h2 style="margin:5px 0; font-size:22px;" onclick="hiddenReset()">林業AR境界ナビ</h2>
-    <p style="color:#4CAF50; font-weight:bold; margin-bottom:20px;">v2.6.2 (トップ配置版)</p>
+    <p style="color:#4CAF50; font-weight:bold; margin-bottom:20px;">v2.6.3 (中央ラベル版)</p>
     <button id="start-btn" class="btn btn-blue" style="font-size:18px; padding:15px 35px; border-radius:30px;" onclick="initApp()">アプリを起動</button>
     <div id="boot-status">準備完了</div>
   </div>
