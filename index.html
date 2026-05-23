@@ -8,11 +8,37 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+  <script>
+    // 【隠しコマンド用】5回連続タップでリセット発動
+    var tapCount = 0;
+    var tapTimer = null;
+    function hiddenReset() {
+      tapCount++;
+      if (tapCount >= 5) {
+        emergencyReset();
+        tapCount = 0;
+      }
+      clearTimeout(tapTimer);
+      tapTimer = setTimeout(function() { tapCount = 0; }, 1000); // 1秒間操作がなければ回数リセット
+    }
+
+    function emergencyReset() {
+      if(confirm('【緊急コマンド実行】\nアプリを完全に初期化します。よろしいですか？')){
+        localStorage.clear();
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            for(var i=0; i<regs.length; i++) { regs[i].unregister(); }
+            window.location.reload(true);
+          });
+        } else { window.location.reload(true); }
+      }
+    }
+  </script>
+
   <style>
     :root { --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom); }
     body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; user-select: none; color: white; }
     
-    /* AR画面 */
     #ar-screen { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; display: none; }
     #ar-screen.active { display: block; }
     #camera-view { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
@@ -21,15 +47,15 @@
     .pillar-body { width: 100%; height: 100%; filter: blur(2px); }
     .pillar-label { position: absolute; top: -60px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85); border: 1px solid white; padding: 4px 10px; border-radius: 8px; font-size: 16px; font-weight: bold; white-space: nowrap; line-height: 1.2; text-align: center; }
 
-    /* 操作パネル（上部配置） */
-    #control-panel { position: absolute; top: calc(10px + var(--safe-top)); left: 50%; transform: translateX(-50%); width: 94%; max-width: 420px; z-index: 20; }
-    .glass-box { background: rgba(0,0,0,0.8); padding: 10px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.6); }
+    /* 操作パネル（下部配置・4段レイアウトに最適化） */
+    #control-panel { position: absolute; bottom: calc(15px + var(--safe-bottom)); left: 50%; transform: translateX(-50%); width: 94%; max-width: 420px; z-index: 20; }
+    .glass-box { background: rgba(0,0,0,0.85); padding: 15px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.8); backdrop-filter: blur(4px); }
     
-    .nav-buttons { display: flex; gap: 6px; justify-content: center; width: 100%; }
+    .nav-buttons { display: flex; gap: 10px; justify-content: center; width: 100%; }
 
-    .btn { padding: 8px 14px; border: none; border-radius: 6px; font-size: 13px; font-weight: bold; cursor: pointer; color: white; white-space: nowrap; }
+    .btn { padding: 10px 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; white-space: nowrap; }
     .btn-blue { background: #007bff; } .btn-green { background: #28a745; } .btn-orange { background: #ff9800; } .btn-red { background: #dc3545; } .btn-gray { background: #555; }
-    .btn-full { width: 100%; margin-bottom: 6px; padding: 10px; font-size: 14px; }
+    .btn-full { width: 100%; margin-bottom: 10px; padding: 12px; font-size: 14px; }
 
     /* 地図・一覧画面（Flexbox・2段ヘッダー） */
     .overlay-screen { display: none; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 100; background: #111; flex-direction: column; }
@@ -48,24 +74,23 @@
     #map { flex: 1; width: 100%; position: relative; z-index: 1; }
     #point-list-content { flex: 1; overflow-y: auto; padding: 15px; box-sizing: border-box; }
     
-    .manual-add-area { background: rgba(255,255,255,0.1); padding: 12px; border-radius: 10px; margin-bottom: 20px; }
-    .manual-add-area input { background: rgba(0,0,0,0.3); border: 1px solid #666; color: white; padding: 8px; border-radius: 4px; font-size: 14px; width: calc(100% - 18px); margin-bottom: 8px; }
-    .list-item { background: rgba(255,255,255,0.06); padding: 10px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1); }
+    .manual-add-area { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.2); }
+    .manual-add-area input { background: rgba(0,0,0,0.4); border: 1px solid #666; color: white; padding: 10px; border-radius: 6px; font-size: 15px; width: calc(100% - 22px); margin-bottom: 10px; }
+    .list-item { background: rgba(255,255,255,0.08); padding: 12px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.1); }
     
-    /* モーダル群 */
+    /* モーダル・ダイアログ・トースト */
     .modal-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 3000; flex-direction: column; justify-content: center; align-items: center; }
     .survey-box { background: #333; padding: 25px; border-radius: 20px; width: 85%; max-width: 320px; border: 2px solid #007bff; text-align: center; }
     .progress-bar { width: 100%; height: 10px; background: #555; border-radius: 5px; margin: 15px 0; overflow: hidden; }
     #progress-fill { width: 0%; height: 100%; background: #007bff; transition: width 0.3s; }
 
     #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a1a; z-index: 5000; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-    #boot-status { margin-top: 15px; font-size: 13px; color: #aaa; text-align: center; min-height: 40px; padding: 0 20px; }
+    #boot-status { margin-top: 20px; font-size: 14px; color: #aaa; text-align: center; min-height: 40px; padding: 0 20px; }
 
-    .custom-dialog { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20,20,20,0.95); padding: 20px; border-radius: 12px; z-index: 4000; text-align: center; width: 80%; max-width: 300px; box-shadow: 0 4px 20px rgba(0,0,0,0.8); }
-    .custom-dialog input { width: 90%; padding: 10px; margin-bottom: 15px; border-radius: 5px; border: 1px solid #666; background: #333; color: white; font-size: 15px; }
+    .custom-dialog { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20,20,20,0.98); padding: 25px; border-radius: 16px; z-index: 4000; text-align: center; width: 80%; max-width: 320px; box-shadow: 0 10px 30px rgba(0,0,0,0.9); }
+    .custom-dialog input { width: 90%; padding: 12px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #666; background: #333; color: white; font-size: 16px; }
     
-    /* トーストメッセージ */
-    #toast { display: none; position: absolute; top: 20%; left: 50%; transform: translateX(-50%); background: rgba(40,167,69,0.9); padding: 12px 24px; border-radius: 30px; z-index: 6000; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+    #toast { display: none; position: absolute; top: 20%; left: 50%; transform: translateX(-50%); background: rgba(40,167,69,0.95); padding: 14px 28px; border-radius: 30px; z-index: 6000; font-weight: bold; font-size: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }
   </style>
 </head>
 <body>
@@ -73,19 +98,19 @@
   <div id="toast">メッセージ</div>
 
   <div id="custom-prompt" class="custom-dialog" style="border: 2px solid #007bff;">
-    <p style="font-weight:bold; margin: 0 0 10px 0;">点名を入力してください</p>
+    <p style="font-weight:bold; font-size:16px; margin: 0 0 15px 0;">点名を入力してください</p>
     <input type="text" id="prompt-input">
-    <div style="display:flex; gap:10px; justify-content:center;">
-      <button class="btn btn-green" onclick="confirmPrompt()">決定</button>
-      <button class="btn btn-gray" onclick="closePrompt()">キャンセル</button>
+    <div style="display:flex; gap:12px; justify-content:center;">
+      <button class="btn btn-green" onclick="confirmPrompt()" style="flex:1;">決定</button>
+      <button class="btn btn-gray" onclick="closePrompt()" style="flex:1;">キャンセル</button>
     </div>
   </div>
 
   <div id="custom-confirm" class="custom-dialog" style="border: 2px solid #dc3545;">
-    <p style="font-weight:bold; margin: 0 0 15px 0;">すべての登録ポイントを<br>削除しますか？</p>
-    <div style="display:flex; gap:10px; justify-content:center;">
-      <button class="btn btn-red" onclick="executeClearPoints()">削除</button>
-      <button class="btn btn-gray" onclick="closeConfirm()">戻る</button>
+    <p style="font-weight:bold; font-size:16px; margin: 0 0 20px 0;">すべての登録ポイントを<br>削除しますか？</p>
+    <div style="display:flex; gap:12px; justify-content:center;">
+      <button class="btn btn-red" onclick="executeClearPoints()" style="flex:1;">削除</button>
+      <button class="btn btn-gray" onclick="closeConfirm()" style="flex:1;">戻る</button>
     </div>
   </div>
 
@@ -94,21 +119,21 @@
       <h3 id="survey-title" style="margin-top:0;">測量中...</h3>
       <div id="survey-status">位置情報を取得しています</div>
       <div class="progress-bar"><div id="progress-fill"></div></div>
-      <div id="survey-results" style="display:none; text-align:left; font-size:14px; line-height:1.6; margin-bottom:15px;">
-        <span id="res-lat"></span><br><span id="res-lng"></span><br><span id="res-sd" style="color:#ff9800; font-weight:bold;"></span>
+      <div id="survey-results" style="display:none; text-align:left; font-size:15px; line-height:1.6; margin-bottom:20px;">
+        <span id="res-lat"></span><br><span id="res-lng"></span><br><span id="res-sd" style="color:#ff9800; font-weight:bold; font-size:16px;"></span>
       </div>
       <div id="survey-btns" style="display:none; gap:10px; justify-content:center;">
-        <button class="btn btn-green" onclick="promptForSurveyName()">この座標で登録</button>
+        <button class="btn btn-green" onclick="promptForSurveyName()">登録</button>
         <button class="btn btn-gray" onclick="closeSurvey()">キャンセル</button>
       </div>
     </div>
   </div>
 
   <div id="start-overlay">
-    <img src="forestry-ar-icon.png" alt="AR" style="width:80px; border-radius:16px; margin-bottom:10px;" onerror="this.style.display='none'">
-    <h2 style="margin:5px 0;">林業AR境界ナビ</h2>
-    <p style="color:#4CAF50; font-weight:bold; margin-bottom:10px;">v2.6.0 (本番環境版)</p>
-    <button id="start-btn" class="btn btn-blue" style="font-size:16px; padding:12px 30px;" onclick="initApp()">ARアプリを起動</button>
+    <img src="forestry-ar-icon.png" alt="AR" style="width:90px; border-radius:18px; margin-bottom:15px;" onerror="this.style.display='none'">
+    <h2 style="margin:5px 0; font-size:22px;" onclick="hiddenReset()">林業AR境界ナビ</h2>
+    <p style="color:#4CAF50; font-weight:bold; margin-bottom:20px;">v2.6.1 (現場テスト版)</p>
+    <button id="start-btn" class="btn btn-blue" style="font-size:18px; padding:15px 35px; border-radius:30px;" onclick="initApp()">アプリを起動</button>
     <div id="boot-status">準備完了</div>
   </div>
 
@@ -118,5 +143,283 @@
     <div id="control-panel">
       <div class="glass-box">
         
-        <button class="btn btn-gray btn-full" id="toggle-form-btn" onclick="toggleForm()">➕ 座標を手入力する</button>
-        <div id="manual-input-form" style="display: none; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 6
+        <div style="text-align: center; margin-bottom: 12px; font-size: 15px;">
+          登録数: <span id="count-display" style="font-weight:bold; color:#28a745; font-size: 18px;">0</span>
+        </div>
+        
+        <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 10px;">
+          <button class="btn btn-orange" id="flip-btn-text" style="flex: 1; padding: 10px 0;" onclick="rotateHeading()">🔄 補正: 0°</button>
+          <button class="btn btn-red" style="flex: 1; padding: 10px 0;" onclick="openConfirm()">🗑 消去</button>
+        </div>
+
+        <button class="btn btn-green btn-full" onclick="startSurvey()">📍 連続測量して現在地を登録</button>
+        
+        <div class="nav-buttons">
+          <button class="btn btn-blue" style="flex:1; padding:12px;" onclick="showMapScreen()">🗺 地図で追加</button>
+          <button class="btn btn-blue" style="flex:1; padding:12px;" onclick="showListScreen()">📄 座標管理</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div id="map-screen" class="overlay-screen">
+    <div class="screen-header">
+      <span class="screen-title">🗺 地図の中心をタップして追加</span>
+      <button class="btn btn-blue header-btn" onclick="showArScreen()">📸 AR画面に戻る</button>
+    </div>
+    <div id="map"></div>
+  </div>
+
+  <div id="point-list-screen" class="overlay-screen">
+    <div class="screen-header">
+      <span class="screen-title">📄 座標管理・手入力</span>
+      <div style="display:flex; gap:10px; width:100%; justify-content:center;">
+        <button class="btn btn-blue header-btn" style="flex:1;" onclick="showMapScreen()">🗺 地図へ</button>
+        <button class="btn btn-blue header-btn" style="flex:1;" onclick="showArScreen()">📸 ARへ</button>
+      </div>
+    </div>
+    <div id="point-list-content">
+      <div class="manual-add-area">
+        <h4 style="margin:0 0 10px 0;">座標を手入力</h4>
+        <input type="text" id="list-manual-name" placeholder="点名 (例: 境界A)">
+        <input type="number" id="list-manual-lat" placeholder="緯度 (36.xxx)" step="0.000001">
+        <input type="number" id="list-manual-lng" placeholder="経度 (136.xxx)" step="0.000001">
+        <button class="btn btn-green btn-full" onclick="listManualAddPoint()">この座標を追加</button>
+      </div>
+      <div id="list-items-container"></div>
+    </div>
+  </div>
+
+  <script>
+    var STORAGE_KEY = 'forestry_ar_points_v6';
+    var currentLat = null, currentLng = null, currentHeading = 0, headingOffset = 0, lastHeading = null;
+    var points = []; 
+    var FOV = 60; 
+    var map = null, markerGroup = null;
+    var surveyPoints = [], isSurveying = false;
+    var currentStream = null;
+
+    loadPoints();
+
+    function showToast(msg) {
+      var t = document.getElementById('toast');
+      t.innerText = msg; t.style.display = 'block';
+      setTimeout(function(){ t.style.display = 'none'; }, 2000);
+    }
+
+    async function startCamera() {
+      try {
+        if (currentStream) { currentStream.getTracks().forEach(t => t.stop()); }
+        currentStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        document.getElementById('camera-view').srcObject = currentStream;
+      } catch(e) { console.warn("Camera Init Error", e); }
+    }
+
+    async function initApp() {
+      var startBtn = document.getElementById('start-btn'), statusText = document.getElementById('boot-status');
+      startBtn.innerText = '起動中...'; startBtn.disabled = true;
+
+      try {
+        statusText.innerText = 'センサー確認中...';
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+          var perm = await DeviceOrientationEvent.requestPermission();
+          if (perm !== 'granted') throw new Error("コンパスへのアクセスが拒否されました");
+        }
+        
+        statusText.innerText = 'カメラ起動中...';
+        await startCamera();
+
+        statusText.innerText = 'GPS準備中...';
+        window.addEventListener('deviceorientation', handleOrientation, true);
+        navigator.geolocation.watchPosition(
+          function(pos) { currentLat = pos.coords.latitude; currentLng = pos.coords.longitude; updateView(); },
+          function(err) { }, { enableHighAccuracy: true }
+        );
+
+        document.getElementById('start-overlay').style.display = 'none';
+        updateUI(); updateView();
+
+      } catch (err) {
+        statusText.innerText = '【エラー】' + err.message;
+        statusText.style.color = '#ff5555';
+        startBtn.innerText = '再試行'; startBtn.disabled = false;
+      }
+    }
+
+    function startSurvey() {
+      if(isSurveying) return;
+      surveyPoints = []; isSurveying = true;
+      document.getElementById('survey-modal').style.display = 'flex';
+      document.getElementById('survey-title').innerText = "測量中...";
+      document.getElementById('survey-results').style.display = 'none';
+      document.getElementById('survey-btns').style.display = 'none';
+      document.getElementById('progress-fill').style.width = '0%';
+      collectSurveyPoint();
+    }
+
+    function collectSurveyPoint() {
+      if(surveyPoints.length >= 10) { finishSurvey(); return; }
+      navigator.geolocation.getCurrentPosition(function(pos) {
+        surveyPoints.push({lat: pos.coords.latitude, lng: pos.coords.longitude});
+        document.getElementById('progress-fill').style.width = ((surveyPoints.length / 10) * 100) + '%';
+        document.getElementById('survey-status').innerText = surveyPoints.length + " / 10 回取得";
+        setTimeout(collectSurveyPoint, 1000);
+      }, function(err){
+        showToast("GPS取得エラー"); closeSurvey();
+      }, { enableHighAccuracy: true });
+    }
+
+    function finishSurvey() {
+      isSurveying = false;
+      var sumLat = 0, sumLng = 0;
+      surveyPoints.forEach(p => { sumLat += p.lat; sumLng += p.lng; });
+      var avgLat = sumLat / 10, avgLng = sumLng / 10;
+      var distErrors = surveyPoints.map(p => calcDistance(avgLat, avgLng, p.lat, p.lng));
+      var meanDist = distErrors.reduce((a,b) => a+b) / 10;
+      var variance = distErrors.reduce((a,b) => a + Math.pow(b - meanDist, 2)) / 10;
+      var sd = Math.sqrt(variance);
+
+      document.getElementById('survey-title').innerText = "測量完了";
+      document.getElementById('res-lat').innerText = "緯度: " + avgLat.toFixed(6);
+      document.getElementById('res-lng').innerText = "経度: " + avgLng.toFixed(6);
+      document.getElementById('res-sd').innerText = "精度(標準偏差): " + sd.toFixed(2) + " m";
+      document.getElementById('survey-results').style.display = 'block';
+      document.getElementById('survey-btns').style.display = 'flex';
+      window.tempSurveyData = {lat: avgLat, lng: avgLng};
+    }
+
+    function promptForSurveyName() {
+      document.getElementById('custom-prompt').style.display = 'block';
+      document.getElementById('prompt-input').value = "P" + (points.length + 1);
+    }
+    function closePrompt() { document.getElementById('custom-prompt').style.display = 'none'; }
+    function confirmPrompt() {
+      var name = document.getElementById('prompt-input').value;
+      if(!name) return;
+      points.push({ lat: window.tempSurveyData.lat, lng: window.tempSurveyData.lng, name: name });
+      savePoints(); updateUI(); closeSurvey(); closePrompt(); showToast("登録しました");
+    }
+    function closeSurvey() { document.getElementById('survey-modal').style.display = 'none'; isSurveying = false; }
+
+    function showMapScreen() {
+      document.getElementById('point-list-screen').classList.remove('active');
+      document.getElementById('map-screen').classList.add('active');
+      
+      if (!map) {
+        map = L.map('map').setView([currentLat || 36.058, currentLng || 136.251], 16);
+        L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png').addTo(map);
+        markerGroup = L.layerGroup().addTo(map);
+        map.on('click', function(e) {
+          var popupHtml = '<div style="color:#000;"><b>点名を入力:</b><br><input type="text" id="map-pname" value="P' + (points.length + 1) + '" style="width:120px; padding:6px; margin:5px 0;"><br><button class="btn btn-green" style="padding:6px 12px;" onclick="window.addPointFromMap(' + e.latlng.lat + ',' + e.latlng.lng + ')">確定</button></div>';
+          L.popup().setLatLng(e.latlng).setContent(popupHtml).openOn(map);
+        });
+      }
+      setTimeout(() => { map.invalidateSize(); if (currentLat && currentLng) map.setView([currentLat, currentLng], 16); updateUIAndMarkers(); }, 100);
+    }
+
+    window.addPointFromMap = function(lat, lng) {
+      var name = document.getElementById('map-pname').value;
+      points.push({ lat: lat, lng: lng, name: name });
+      savePoints(); updateUIAndMarkers(); map.closePopup(); showToast("登録しました");
+    };
+
+    function showListScreen() {
+      document.getElementById('map-screen').classList.remove('active');
+      document.getElementById('point-list-screen').classList.add('active');
+      updatePointList();
+    }
+
+    function showArScreen() {
+      document.getElementById('map-screen').classList.remove('active');
+      document.getElementById('point-list-screen').classList.remove('active');
+      startCamera();
+      updateView();
+    }
+
+    function listManualAddPoint() {
+      var lat = parseFloat(document.getElementById('list-manual-lat').value), lng = parseFloat(document.getElementById('list-manual-lng').value);
+      var name = document.getElementById('list-manual-name').value || ('P' + (points.length + 1));
+      if (isNaN(lat) || isNaN(lng)) return showToast('座標が不正です');
+      points.push({ lat: lat, lng: lng, name: name });
+      savePoints(); updateUI(); updatePointList(); showToast('追加しました');
+      document.getElementById('list-manual-lat').value = ''; document.getElementById('list-manual-lng').value = '';
+    }
+
+    function updatePointList() {
+      var container = document.getElementById('list-items-container'); container.innerHTML = '';
+      if(points.length === 0) { container.innerHTML = '<p style="text-align:center; color:#888;">登録データなし</p>'; return; }
+      points.forEach((p, i) => {
+        container.insertAdjacentHTML('beforeend', `<div class="list-item"><div style="font-size:14px;"><b>${p.name}</b><br><span style="font-family:monospace; color:#aaa;">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span></div><button class="btn btn-red" style="padding:6px 12px;" onclick="deletePoint(${i})">削除</button></div>`);
+      });
+    }
+
+    function deletePoint(i) { points.splice(i, 1); savePoints(); updatePointList(); updateUI(); }
+    function savePoints() { localStorage.setItem(STORAGE_KEY, JSON.stringify(points)); }
+    function loadPoints() { var s = localStorage.getItem(STORAGE_KEY); if(s) points = JSON.parse(s); }
+    function openConfirm() { document.getElementById('custom-confirm').style.display = 'block'; }
+    function closeConfirm() { document.getElementById('custom-confirm').style.display = 'none'; }
+    function executeClearPoints() { points = []; savePoints(); updateUI(); updateView(); closeConfirm(); showToast("消去しました"); }
+    function rotateHeading() { headingOffset = (headingOffset + 90) % 360; document.getElementById('flip-btn-text').innerText = '🔄 補正: ' + headingOffset + '°'; updateView(); }
+    function updateUI() { document.getElementById('count-display').innerText = points.length; }
+
+    function handleOrientation(event) {
+      var raw = event.webkitCompassHeading || (360 - event.alpha);
+      var target = (raw + headingOffset) % 360;
+      if (lastHeading === null) { lastHeading = target; } else {
+        var d = target - lastHeading;
+        if (d > 180) d -= 360; if (d < -180) d += 360;
+        lastHeading = (lastHeading + d * 0.15 + 360) % 360;
+      }
+      currentHeading = lastHeading; updateView();
+    }
+
+    function updateView() {
+      var container = document.getElementById('pillars-container');
+      if (!currentLat || points.length === 0) { container.innerHTML = ''; return; }
+      var html = '';
+      points.forEach(p => {
+        var dist = calcDistance(currentLat, currentLng, p.lat, p.lng);
+        var targetBearing = calcBearing(currentLat, currentLng, p.lat, p.lng);
+        var diff = targetBearing - currentHeading;
+        if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
+
+        if (Math.abs(diff) < FOV / 2) {
+          var screenX = 50 + (diff / (FOV / 2)) * 50;
+          var scale = Math.min(3.0, Math.max(0.3, 40 / Math.max(dist, 1)));
+          var hue = 220; if (dist < 20) hue = 0; else if (dist < 40) hue = 60; 
+
+          html += `<div class="light-pillar" style="display:block; left:${screenX}%; transform:translateX(-50%) scaleX(${scale});">
+            <div class="pillar-label" style="border-color:hsla(${hue},100%,50%,1);">${p.name}<br>${Math.round(dist)} m</div>
+            <div class="pillar-body" style="background:linear-gradient(to top, hsla(${hue},100%,50%,0.8), transparent); box-shadow:0 0 15px hsla(${hue},100%,50%,0.5);"></div>
+          </div>`;
+        }
+      });
+      container.innerHTML = html;
+    }
+
+    function calcDistance(lat1, lon1, lat2, lon2) {
+      var R = 6371e3, f1 = lat1 * Math.PI / 180, f2 = lat2 * Math.PI / 180, df = (lat2-lat1)*Math.PI/180, dl = (lon2-lon1)*Math.PI/180;
+      var a = Math.sin(df/2)*Math.sin(df/2) + Math.cos(f1)*Math.cos(f2)*Math.sin(dl/2)*Math.sin(dl/2);
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+    function calcBearing(lat1, lon1, lat2, lon2) {
+      var f1 = lat1*Math.PI/180, f2 = lat2*Math.PI/180, dl = (lon2-lon1)*Math.PI/180;
+      var y = Math.sin(dl)*Math.cos(f2), x = Math.cos(f1)*Math.sin(f2)-Math.sin(f1)*Math.cos(f2)*Math.cos(dl);
+      return (Math.atan2(y, x)*180/Math.PI + 360) % 360;
+    }
+    function updateUIAndMarkers() { if(markerGroup){ markerGroup.clearLayers(); points.forEach(p => L.marker([p.lat, p.lng]).addTo(markerGroup).bindPopup(p.name)); } updateUI(); }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) window.location.reload(true);
+          });
+        });
+      });
+    }
+  </script>
+</body>
+</html>
